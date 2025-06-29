@@ -1,0 +1,202 @@
+Folder PATH listing
+Volume serial number is BE5B-C058
+C:.
+¦   .classpath
+¦   .gitignore
+¦   .project
+¦   pom.xml
+¦   project_structure.txt
+¦   
++---.settings
+¦       org.eclipse.jdt.core.prefs
+¦       org.eclipse.m2e.core.prefs
+¦       
++---logs
+¦       automation.log
+¦       
++---reports
+¦   ¦   extent-report.html
+¦   ¦   
+¦   +---screenshots
++---screenshots
++---src
+¦   +---main
+¦   ¦   +---java
+¦   ¦   ¦   +---com
+¦   ¦   ¦       +---demo
+¦   ¦   ¦           +---flightbooking
+¦   ¦   ¦               +---enums
+¦   ¦   ¦               ¦       BrowserType.java
+¦   ¦   ¦               ¦       EnvironmentType.java
+¦   ¦   ¦               ¦       
+¦   ¦   ¦               +---model
+¦   ¦   ¦               ¦       Passenger.java
+¦   ¦   ¦               ¦       
+¦   ¦   ¦               +---pages
+¦   ¦   ¦               ¦       BasePage.java
+¦   ¦   ¦               ¦       FlightSelectionPage.java
+¦   ¦   ¦               ¦       HomePage.java
+¦   ¦   ¦               ¦       PurchasePage.java
+¦   ¦   ¦               ¦       
+¦   ¦   ¦               +---utils
+¦   ¦   ¦                       ConfigReader.java
+¦   ¦   ¦                       DriverManager.java
+¦   ¦   ¦                       ExtentManager.java
+¦   ¦   ¦                       ScreenshotUtils.java
+¦   ¦   ¦                       WebDriverUtils.java
+¦   ¦   ¦                       
+¦   ¦   +---resources
+¦   +---test
+¦       +---java
+¦       ¦   +---com
+¦       ¦       +---demo
+¦       ¦           +---flightbooking
+¦       ¦               +---listeners
+¦       ¦               ¦       RetryAnalyzer.java
+¦       ¦               ¦       TestListener.java
+¦       ¦               ¦       
+¦       ¦               +---tests
+¦       ¦               ¦   +---base
+¦       ¦               ¦   ¦       BaseTest.java
+¦       ¦               ¦   ¦       
+¦       ¦               ¦   +---booking
+¦       ¦               ¦           BookingTest.java
+¦       ¦               ¦           
+¦       ¦               +---utils
+¦       ¦                       CsvDataProvider.java
+¦       ¦                       JsonDataProvider.java
+¦       ¦                       
+¦       +---resources
+¦           ¦   log4j2.xml
+¦           ¦   
+¦           +---config
+¦           ¦       config.properties
+¦           ¦       
+¦           +---test-suites
+¦           ¦       testng-regression.xml
+¦           ¦       testng-smoke.xml
+¦           ¦       
+¦           +---testdata
+¦                   flight-search-data.json
+¦                   passenger-data.csv
+¦                   passengers.json
+¦                   
++---target
+¦   +---classes
+¦   ¦   +---com
+¦   ¦   ¦   +---demo
+¦   ¦   ¦       +---flightbooking
+¦   ¦   ¦           +---enums
+¦   ¦   ¦           ¦       BrowserType.class
+¦   ¦   ¦           ¦       EnvironmentType.class
+¦   ¦   ¦           ¦       
+¦   ¦   ¦           +---model
+¦   ¦   ¦           ¦       Passenger.class
+¦   ¦   ¦           ¦       
+¦   ¦   ¦           +---pages
+¦   ¦   ¦           ¦       BasePage.class
+¦   ¦   ¦           ¦       FlightSelectionPage.class
+¦   ¦   ¦           ¦       HomePage.class
+¦   ¦   ¦           ¦       PurchasePage.class
+¦   ¦   ¦           ¦       
+¦   ¦   ¦           +---utils
+¦   ¦   ¦                   ConfigReader.class
+¦   ¦   ¦                   DriverManager.class
+¦   ¦   ¦                   ExtentManager.class
+¦   ¦   ¦                   ScreenshotUtils.class
+¦   ¦   ¦                   WebDriverUtils.class
+¦   ¦   ¦                   
+¦   ¦   +---META-INF
+¦   ¦       ¦   MANIFEST.MF
+¦   ¦       ¦   
+¦   ¦       +---maven
+¦   ¦           +---com.demo
+¦   ¦               +---flightbooking
+¦   ¦                       pom.properties
+¦   ¦                       pom.xml
+¦   ¦                       
+¦   +---test-classes
+¦       ¦   log4j2.xml
+¦       ¦   
+¦       +---com
+¦       ¦   +---demo
+¦       ¦       +---flightbooking
+¦       ¦           +---listeners
+¦       ¦           ¦       RetryAnalyzer.class
+¦       ¦           ¦       TestListener.class
+¦       ¦           ¦       
+¦       ¦           +---tests
+¦       ¦           ¦   +---base
+¦       ¦           ¦   ¦       BaseTest.class
+¦       ¦           ¦   ¦       
+¦       ¦           ¦   +---booking
+¦       ¦           ¦           BookingTest.class
+¦       ¦           ¦           
+¦       ¦           +---utils
+¦       ¦                   CsvDataProvider.class
+¦       ¦                   JsonDataProvider$1.class
+¦       ¦                   JsonDataProvider.class
+¦       ¦                   
+¦       +---config
+¦       ¦       config.properties
+¦       ¦       
+¦       +---test-suites
+¦       ¦       testng-regression.xml
+¦       ¦       testng-smoke.xml
+¦       ¦       
+¦       +---testdata
+¦               flight-search-data.json
+¦               passenger-data.csv
+¦               passengers.json
+¦               
++---test-output
+    ¦   bullet_point.png
+    ¦   collapseall.gif
+    ¦   emailable-report.html
+    ¦   failed.png
+    ¦   index.html
+    ¦   jquery-3.6.0.min.js
+    ¦   navigator-bullet.png
+    ¦   passed.png
+    ¦   skipped.png
+    ¦   testng-failed.xml
+    ¦   testng-reports.css
+    ¦   testng-reports.js
+    ¦   testng-reports1.css
+    ¦   testng-reports2.js
+    ¦   testng-results.xml
+    ¦   
+    +---Default suite
+    ¦       Default test.html
+    ¦       Default test.xml
+    ¦       testng-failed.xml
+    ¦       
+    +---FlightBookingSmokeAndBookingSuite
+    ¦       AllBookingTests.html
+    ¦       AllBookingTests.xml
+    ¦       
+    +---junitreports
+    ¦       TEST-com.demo.flightbooking.tests.booking.BookingTest.xml
+    ¦       
+    +---Regression Suite
+    ¦       Flight Booking Regression Test.html
+    ¦       Flight Booking Regression Test.xml
+    ¦       testng-failed.xml
+    ¦       
+    +---RegressionSuite
+    ¦       FullRegressionTest.html
+    ¦       FullRegressionTest.xml
+    ¦       
+    +---Smoke Suite
+    ¦       Flight Booking Smoke Test.html
+    ¦       Flight Booking Smoke Test.xml
+    ¦       
+    +---SmokeSuite
+    ¦       SmokeTest.html
+    ¦       SmokeTest.xml
+    ¦       
+    +---test
+            SmokeTest.html
+            SmokeTest.xml
+            testng-failed.xml
+            
