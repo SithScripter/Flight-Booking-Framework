@@ -8,7 +8,7 @@ pipeline {
     // These names must match what you have configured in Jenkins > Manage Jenkins > Tools.
     tools {
         maven 'apache-maven-3.9.9' // Use the name you configured for your Maven installation
-        jdk 'JDK 21' // Use the name you configured for your JDK installation
+        jdk 'JDK 21'               // Use the name you configured for your JDK installation
     }
 
     // 3. Stages: The sequence of steps our pipeline will execute.
