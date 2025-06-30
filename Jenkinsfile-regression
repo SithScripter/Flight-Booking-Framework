@@ -1,0 +1,48 @@
+// Jenkinsfile-regression (For the Nightly Full Regression Suite)
+
+pipeline {
+    agent any
+
+    tools {
+        maven 'apache-maven-3.9.9' // Your specific Maven tool name
+        jdk 'JDK 21'             // Your specific JDK tool name
+    }
+
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                echo 'Cleaning up the workspace...'
+                cleanWs()
+            }
+        }
+
+        stage('Checkout SCM') {
+            steps {
+                echo 'Checking out code from GitHub...'
+                checkout scm
+            }
+        }
+
+        stage('Build & Run Regression Tests') {
+            steps {
+                echo 'Building the project and running the FULL regression test suite...'
+                // --- KEY CHANGE ---
+                // We activate the 'regression' profile using the -P flag.
+                bat 'mvn clean test -P regression -Denv=PRODUCTION'
+            }
+        }
+
+        stage('Archive Regression Report') {
+            steps {
+                always {
+                    echo 'Archiving the HTML test report...'
+                    // We can give the report a unique name to differentiate it
+                    archiveArtifacts artifacts: 'reports/extent-report.html', MAPPING: [
+                        [from: 'extent-report.html', to: 'regression-report.html']
+                    ]
+                    , allowEmptyArchive: true
+                }
+            }
+        }
+    }
+}
