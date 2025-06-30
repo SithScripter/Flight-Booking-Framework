@@ -35,7 +35,7 @@ pipeline {
                 echo 'Building the project and running the smoke test suite...'
                 // We run the default command. Our pom.xml is configured to run the 'smoke'
                 // profile by default. We can also add parameters like -Denv=QA.
-                bat 'mvn clean test -Denv=QA'
+                bat 'mvn clean test -Denv=PRODUCTION'
             }
         }
 
