@@ -7,7 +7,7 @@ pipeline {
     // 2. Tools: Defines tools that must be available on the agent.
     // These names must match what you have configured in Jenkins > Manage Jenkins > Tools.
     tools {
-        maven 'Maven_3.9.6' // Use the name you configured for your Maven installation
+        maven 'Maven_3.9.9' // Use the name you configured for your Maven installation
         jdk 'JDK_21'      // Use the name you configured for your JDK installation
     }
 
