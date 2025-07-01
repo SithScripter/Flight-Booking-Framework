@@ -96,7 +96,7 @@ pipeline {
                 emailext(
                     subject: emailSubject,
                     body: emailBody,
-                    to: 'your.email@example.com', // IMPORTANT: Change this to your actual email address.
+                    to: 'forwardtoanuj@gmail.com', // IMPORTANT: Change this to your actual email address.
                     mimeType: 'text/html'         // We specify the body contains HTML to render links correctly.
                 )
             }
