@@ -19,6 +19,7 @@ pipeline {
         stage('Checkout SCM') {
             steps {
                 echo 'Checking out code from GitHub...'
+                // This step always fetches the latest commit from the configured branch
                 checkout scm
             }
         }
