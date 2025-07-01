@@ -92,7 +92,7 @@ pipeline {
 					"""
                 }
 
-                // This is the step provided by the Email Extension plugin to send a rich HTML email.
+                // This is the step provided by the Email Extension plugin to send a rich HTML email
                 emailext(
                     subject: emailSubject,
                     body: emailBody,
