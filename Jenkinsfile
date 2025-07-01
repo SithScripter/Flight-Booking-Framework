@@ -7,7 +7,7 @@ pipeline {
         // We are creating a 'Choice' parameter (a dropdown menu)
         choice(
             name: 'TARGET_ENVIRONMENT', // The variable name for our parameter.
-            choices: ['QA', 'STAGING', 'PRODUCTION'], // The options in the dropdown. 'QA' is the default.
+            choices: ['PRODUCTION', 'QA', 'STAGING'], // The options in the dropdown. 'PRODUCTION' is the default.
             description: 'Select the target environment to run the tests against.'
         )
     }
