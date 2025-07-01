@@ -55,7 +55,7 @@ pipeline {
     post {
         // The 'always' condition ensures a notification is sent for any build outcome.
         always {
-			 // --- ACTION 1: Archive and Process Reports ---
+			 // ---- ACTION 1: Archive and Process Reports ----
             echo 'Archiving reports and processing test results...'
 
             // Rename the report to give it a unique name.
