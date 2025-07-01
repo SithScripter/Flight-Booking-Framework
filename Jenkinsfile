@@ -74,7 +74,7 @@ pipeline {
                 allowMissing: true              // Don't fail the build if the report is missing for some reason.
             )
 			
-			// --- ACTION 2: Send Email Notification ---
+			// ---- ACTION 2: Send Email Notification ----
             // A 'script' block is used here to allow for more complex Groovy logic, like defining variables and using if/else statements.
             script {
                 def emailSubject
