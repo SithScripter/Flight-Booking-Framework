@@ -50,61 +50,63 @@ pipeline {
             }
         }
     } // The 'stages' block ends here.
-
-    // The 'post' block defines actions that run after all the main stages are complete.
+    
+    // The 'post' block with the final, correct logic for archiving, publishing, and notifications.
     post {
-        // The 'always' condition ensures a notification is sent for any build outcome.
         always {
-			 // ---- ACTION 1: Archive and Process Reports ----
-            echo 'Archiving reports and publishing HTML report...'
+            // --- ACTION 1: Archive and Publish the Full Report Folder ---
+            echo 'Archiving and publishing the full HTML report folder...'
 
-            // Step 1: Rename the report to give it a unique name.
+            // First, rename the report file itself so we can find it easily.
             bat 'if exist reports\\extent-report.html (move reports\\extent-report.html reports\\smoke-report.html)'
-
-            // Step 2: Archive the artifact. This keeps a raw copy of the report with the build.
-            archiveArtifacts artifacts: 'reports/smoke-report.html', allowEmptyArchive: true
             
-            // Step 3: Publish the HTML report. This creates a user-friendly link in the Jenkins UI.
+            // Now, archive the ENTIRE 'reports' directory to preserve CSS/JS assets.
+            archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+
+            // Publish the specific HTML file from within the archived directory.
             publishHTML(
-                reportName: 'Smoke Test Report', // The name of the link that will appear on the job page.
-                reportDir: 'reports',           // The directory (relative to workspace) where the report is located.
-                reportFiles: 'smoke-report.html', // The specific HTML file to display.
-                keepAll: true,                  // Keep reports for all builds, not just the last one.
-                alwaysLinkToLastBuild: true,    // Ensure the main job page links to the latest report.
-                allowMissing: true              // Don't fail the build if the report is missing for some reason.
+                reportName: 'Smoke Test Report',
+                reportDir: 'reports',
+                reportFiles: 'smoke-report.html',
+                keepAll: true,
+                alwaysLinkToLastBuild: true,
+                allowMissing: true
             )
 			
-			// ---- ACTION 2: Send Email Notification ----
-            // A 'script' block is used here to allow for more complex Groovy logic, like defining variables and using if/else statements.
+            // --- ACTION 2: Send Email Notification with a Link AND an Attachment ---
             script {
                 def emailSubject
                 def emailBody
+                
+                // This is the direct link to the report artifact that Jenkins stores.
+                def reportURL = "${env.BUILD_URL}artifact/reports/smoke-report.html"
 
-                // We check the build's result to create a dynamic subject and body for the email.
                 if (currentBuild.currentResult == 'SUCCESS') {
                     emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
                     emailBody = """
-					<p>Build was successful. See the attached report and test results.</p>
-					<p>Build URL: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-					"""
+                    <p>Build was successful.</p>
+                    <p><b><a href='${env.BUILD_URL}'>View Build in Jenkins</a></b></p>
+                    <p><b><a href='${reportURL}'>📄 View Smoke Test Report</a></b></p>
+                    """
                 } else {
                     emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                    emailBody = """<p><b>WARNING: The build has failed.</b></p>
-					<p>See the attached report and test results for details.</p>
-					<p>Build URL: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-					"""
+                    emailBody = """
+                    <p><b>WARNING: The build has failed.</b></p>
+                    <p><b><a href='${env.BUILD_URL}'>View Build in Jenkins</a></b></p>
+                    <p><b><a href='${reportURL}'>📄 View Smoke Test Report</a></b></p>
+                    """
                 }
                 
-                 // This is the step provided to send a rich HTML email
-                // Use withCredentials to securely access the email address
                 withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
                     emailext(
                         subject: emailSubject,
                         body: emailBody,
-                        to: RECIPIENT_EMAILS, // Use the variable injected by withCredentials
-                        mimeType: 'text/html'
+                        to: RECIPIENT_EMAILS,
+                        mimeType: 'text/html',
+                        // We can also still attach the file for offline viewing.
+                        attachmentsPattern: 'reports/smoke-report.html'
                     )
-            	}
+                }
             }
         }
     }
