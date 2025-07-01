@@ -26,7 +26,6 @@ pipeline {
         stage('Build & Run Regression Tests') {
             steps {
                 echo 'Building the project and running the FULL regression test suite...'
-                // --- KEY CHANGE ---
                 // We activate the 'regression' profile using the -P flag.
                 bat 'mvn clean test -P regression -Denv=PRODUCTION'
             }
@@ -35,12 +34,14 @@ pipeline {
         stage('Archive Regression Report') {
             steps {
                 always {
-                    echo 'Archiving the HTML test report...'
-                    // We can give the report a unique name to differentiate it
-                    archiveArtifacts artifacts: 'reports/extent-report.html', MAPPING: [
-                        [from: 'extent-report.html', to: 'regression-report.html']
-                    ]
-                    , allowEmptyArchive: true
+                    echo 'Preparing and archiving the HTML test report...'
+                    
+                    // --- CORRECTED LOGIC ---
+                    // Step 1: Rename the generic report to a specific one for the regression run.
+                    bat 'if exist reports\\extent-report.html (move reports\\extent-report.html reports\\regression-report.html)'
+                    
+                    // Step 2: Archive the newly named file.
+                    archiveArtifacts artifacts: 'reports/regression-report.html', allowEmptyArchive: true
                 }
             }
         }
