@@ -57,6 +57,9 @@ public class BookingTest extends BaseTest {
 
         boolean urlContainsPurchase = webDriverUtils.waitUntilUrlContains("/purchase.php");
         Assert.assertTrue(urlContainsPurchase, "Did not navigate to purchase page!");
+        
+        // --- ADD THIS LINE TO FORCE A FAILURE ---
+        Assert.assertTrue(false, "Intentionally failing test to check email notification.");
 
         PurchasePage purchasePage = new PurchasePage(driver);
         purchasePage.fillPurchaseForm(passenger);
