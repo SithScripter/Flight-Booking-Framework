@@ -49,29 +49,25 @@ pipeline {
                 bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT}"
             }
         }
-        
-        // Stage 4: Archives the test report so it can be viewed from the Jenkins UI.
-        stage('Archive Smoke Report') {
-            steps {
-                // The 'always' block ensures these steps run regardless of the build's outcome (success or failure).
-                // This is critical so we can always access the report, especially for failed runs.
-                always {
-                    echo 'Preparing and archiving the HTML test report with a unique name...'
-                    
-                    // Step A: Rename the generic report to a specific one. This is the correct, reliable way to handle renaming.
-                    bat 'if exist reports\\extent-report.html (move reports\\extent-report.html reports\\smoke-report.html)'
-                    
-                    // Step B: Archive the newly named file. The path is relative to the workspace root.
-                    archiveArtifacts artifacts: 'reports/smoke-report.html', allowEmptyArchive: true
-                }
-            }
-        }
     } // The 'stages' block ends here.
 
     // The 'post' block defines actions that run after all the main stages are complete.
     post {
         // The 'always' condition ensures a notification is sent for any build outcome.
         always {
+			 // --- ACTION 1: Archive and Process Reports ---
+            echo 'Archiving reports and processing test results...'
+
+            // Rename the report to give it a unique name.
+            bat 'if exist reports\\extent-report.html (move reports\\extent-report.html reports\\smoke-report.html)'
+            
+            // Archive the uniquely named HTML report.
+            archiveArtifacts artifacts: 'reports/smoke-report.html', allowEmptyArchive: true
+
+            // Use the TestNG plugin to parse results and create trend graphs.
+            testng(pattern: 'target/surefire-reports/testng-results.xml', allowEmptyResults: true)
+			
+			// --- ACTION 2: Send Email Notification ---
             // A 'script' block is used here to allow for more complex Groovy logic, like defining variables and using if/else statements.
             script {
                 def emailSubject
@@ -81,24 +77,27 @@ pipeline {
                 if (currentBuild.currentResult == 'SUCCESS') {
                     emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
                     emailBody = """
-					<p>Congratulations, the build was successful!</p>
-					<p>Check the build details here: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>"""
+					<p>Build was successful. See the attached report and test results.</p>
+					<p>Build URL: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+					"""
                 } else {
                     emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                    emailBody = """
-					<p><b>WARNING: The build has failed.</b></p>
-					<p>Immediate attention may be required.</p>
-					<p>Check the build failure details here: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                    emailBody = """<p><b>WARNING: The build has failed.</b></p>
+					<p>See the attached report and test results for details.</p>
+					<p>Build URL: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
 					"""
                 }
-
-                // This is the step provided by the Email Extension plugin to send a rich HTML email
-                emailext(
-                    subject: emailSubject,
-                    body: emailBody,
-                    to: 'forwardtoanuj@gmail.com', // IMPORTANT: Change this to your actual email address.
-                    mimeType: 'text/html'         // We specify the body contains HTML to render links correctly.
-                )
+                
+                 // This is the step provided by the Email Extension plugin to send a rich HTML email
+                // Use withCredentials to securely access the email address
+                withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+                    emailext(
+                        subject: emailSubject,
+                        body: emailBody,
+                        to: RECIPIENT_EMAILS, // Use the variable injected by withCredentials
+                        mimeType: 'text/html'
+                    )
+            	}
             }
         }
     }
