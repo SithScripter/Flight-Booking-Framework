@@ -56,16 +56,23 @@ pipeline {
         // The 'always' condition ensures a notification is sent for any build outcome.
         always {
 			 // ---- ACTION 1: Archive and Process Reports ----
-            echo 'Archiving reports and processing test results...'
+            echo 'Archiving reports and publishing HTML report...'
 
-            // Rename the report to give it a unique name.
+            // Step 1: Rename the report to give it a unique name.
             bat 'if exist reports\\extent-report.html (move reports\\extent-report.html reports\\smoke-report.html)'
-            
-            // Archive the uniquely named HTML report.
-            archiveArtifacts artifacts: 'reports/smoke-report.html', allowEmptyArchive: true
 
-            // Use the TestNG plugin to parse results and create trend graphs.
-            testng(pattern: 'target/surefire-reports/testng-results.xml', allowEmptyResults: true)
+            // Step 2: Archive the artifact. This keeps a raw copy of the report with the build.
+            archiveArtifacts artifacts: 'reports/smoke-report.html', allowEmptyArchive: true
+            
+            // Step 3: Publish the HTML report. This creates a user-friendly link in the Jenkins UI.
+            publishHTML(
+                reportName: 'Smoke Test Report', // The name of the link that will appear on the job page.
+                reportDir: 'reports',           // The directory (relative to workspace) where the report is located.
+                reportFiles: 'smoke-report.html', // The specific HTML file to display.
+                keepAll: true,                  // Keep reports for all builds, not just the last one.
+                alwaysLinkToLastBuild: true,    // Ensure the main job page links to the latest report.
+                allowMissing: true              // Don't fail the build if the report is missing for some reason.
+            )
 			
 			// --- ACTION 2: Send Email Notification ---
             // A 'script' block is used here to allow for more complex Groovy logic, like defining variables and using if/else statements.
@@ -88,7 +95,7 @@ pipeline {
 					"""
                 }
                 
-                 // This is the step provided by the Email Extension plugin to send a rich HTML email
+                 // This is the step provided to send a rich HTML email
                 // Use withCredentials to securely access the email address
                 withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
                     emailext(
