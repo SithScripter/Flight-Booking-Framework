@@ -55,56 +55,47 @@ pipeline {
     post {
         always {
             // ---ACTION 1: Archive and Publish the Full Report Folder---
-            echo 'Archiving and publishing the full HTML report folder...'
-
-            // First, rename the report file itself so we can find it easily.
-            bat 'if exist reports\\extent-report.html (move reports\\extent-report.html reports\\smoke-report.html)'
+            echo 'Archiving and publishing reports...'
+            
+            // Archive the entire 'reports' directory, which now contains both versions.
+       	 	archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
             
             // Now, archive the ENTIRE 'reports' directory to preserve CSS/JS assets.
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
             // Publish the specific HTML file from within the archived directory.
-            publishHTML(
-                reportName: 'Smoke Test Report',
-                reportDir: 'reports',
-                reportFiles: 'smoke-report.html',
-                keepAll: true,
-                alwaysLinkToLastBuild: true,
-                allowMissing: true
-            )
+        	publishHTML(
+            reportName: 'Test Execution Report',
+            reportDir: 'reports',
+            reportFiles: 'index.html',
+            keepAll: true,
+            alwaysLinkToLastBuild: true,
+            allowMissing: true
+       		)
 			
             // --- ACTION 2: Send Email Notification with a Link AND an Attachment ---
             script {
                 def emailSubject
                 def emailBody
                 
-                // This is the direct link to the report artifact that Jenkins stores.
-                def reportURL = "${env.BUILD_URL}artifact/reports/smoke-report.html"
+            def reportURL = "${env.BUILD_URL}Test-Execution-Report/" // Link to the Jenkins UI report
 
-                if (currentBuild.currentResult == 'SUCCESS') {
-                    emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                    emailBody = """
-                    <p>Build was successful.</p>
-                    <p><b><a href='${env.BUILD_URL}'>View Build in Jenkins</a></b></p>
-                    <p><b><a href='${reportURL}'>📄 View Smoke Test Report</a></b></p>
-                    """
-                } else {
-                    emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                    emailBody = """
-                    <p><b>WARNING: The build has failed.</b></p>
-                    <p><b><a href='${env.BUILD_URL}'>View Build in Jenkins</a></b></p>
-                    <p><b><a href='${reportURL}'>📄 View Smoke Test Report</a></b></p>
-                    """
-                }
-                
-                withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
-                    emailext(
-                        subject: emailSubject,
-                        body: emailBody,
-                        to: RECIPIENT_EMAILS,
-                        mimeType: 'text/html',
-                        // We can also still attach the file for offline viewing.
-                        attachmentsPattern: 'reports/smoke-report.html'
+            if (currentBuild.currentResult == 'SUCCESS') {
+                emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                emailBody = """<p>Build was successful.</p><p><b><a href='${reportURL}'>📄 View Interactive Report in Jenkins</a></b></p>"""
+            } else {
+                emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                emailBody = """<p><b>WARNING: The build has failed.</b></p><p><b><a href='${reportURL}'>📄 View Interactive Report in Jenkins</a></b></p>"""
+            }
+            
+            withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+                emailext(
+                    subject: emailSubject,
+                    body: emailBody,
+                    to: RECIPIENT_EMAILS,
+                    mimeType: 'text/html',
+                    // Attach the specific 'offline' report file.
+                    attachmentsPattern: 'reports/smoke-report-offline.html'
                     )
                 }
             }

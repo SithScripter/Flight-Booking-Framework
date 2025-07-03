@@ -31,33 +31,33 @@ public class BaseTest {
    */
   @BeforeSuite(alwaysRun = true)
   public void setUpSuite() {
-    File logsDir = new File("logs");
-    if (!logsDir.exists()) {
-      logsDir.mkdirs();
-    }
-    logger.info("Logs directory ensured.");
+      File logsDir = new File("logs");
+      if (!logsDir.exists()) {
+          logsDir.mkdirs();
+      }
+      logger.info("Logs directory ensured.");
 
-    // Initialize ExtentReports
-    String reportPath = "reports/extent-report.html";
-    ExtentSparkReporter sparkReporter = new ExtentSparkReporter(reportPath);
-    sparkReporter.config().setDocumentTitle("Flight Booking Automation Report");
-    sparkReporter.config().setReportName("Flight Booking Test Results");
-    sparkReporter.config().setTimeStampFormat("MMM dd, yyyy HH:mm:ss");
+      // Initialize the main ExtentReports object
+      extentReports = new ExtentReports();
 
-    // --- THIS IS THE ADDED LINE ---
-    // Force the reporter to generate a single, self-contained offline file
-    // with all CSS and JS embedded.
-    sparkReporter.config().setOfflineMode(true);
+      // --- REPORTER 1: For the Jenkins UI (Directory-based) ---
+      ExtentSparkReporter onlineReporter = new ExtentSparkReporter("reports/");
+      onlineReporter.config().setDocumentTitle("Flight Booking - Online Report");
 
-    extentReports = new ExtentReports();
-    extentReports.attachReporter(sparkReporter);
+      // --- REPORTER 2: For the Email Attachment (Self-contained offline file) ---
+      ExtentSparkReporter offlineReporter = new ExtentSparkReporter("reports/smoke-report-offline.html");
+      offlineReporter.config().setOfflineMode(true); // This is the key for a single, self-contained file
+      offlineReporter.config().setDocumentTitle("Flight Booking - Offline Report");
 
-    // Set system information for the report
-    extentReports.setSystemInfo("Tester", ConfigReader.getProperty("tester.name"));
-    extentReports.setSystemInfo("OS", System.getProperty("os.name"));
-    extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
-    extentReports.setSystemInfo("Browser", ConfigReader.getProperty("browser"));
-    logger.info("ExtentReports initialized for the suite.");
+      // Attach BOTH reporters to the main ExtentReports object
+      extentReports.attachReporter(onlineReporter, offlineReporter);
+
+      // Set system information for the report (applies to both)
+      extentReports.setSystemInfo("Tester", ConfigReader.getProperty("tester.name"));
+      extentReports.setSystemInfo("OS", System.getProperty("os.name"));
+      extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
+      extentReports.setSystemInfo("Browser", ConfigReader.getProperty("browser"));
+      logger.info("ExtentReports initialized with both online and offline reporters.");
   }
 
   /**
