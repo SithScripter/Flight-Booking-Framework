@@ -54,46 +54,44 @@ pipeline {
     // The 'post' block with the final, correct logic for archiving, publishing, and notifications.
     post {
         always {
-            echo 'Archiving reports and publishing results...'
+             echo 'Archiving and publishing smoke-report.html...'
 
             // --- ACTION 1: Archive and Publish ---
 
-            // We archive the entire folder to include the 'index.html' and its resources.
-            archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+        	// ✅ Archive the full report folder (screenshots included)
+        	archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
-            // We publish the 'index.html' for the main, interactive Jenkins UI report.
-            publishHTML(
-                reportName: 'Test Execution Report',
-                reportDir: 'reports',
-                reportFiles: 'index.html',
-                keepAll: true,
-                alwaysLinkToLastBuild: true,
-                allowMissing: true
-            )
+        	// ✅ Publish the self-contained HTML report
+        	publishHTML(
+            reportName: 'Smoke Test Report',
+            reportDir: 'reports',
+            reportFiles: 'smoke-report.html',
+            keepAll: true,
+            alwaysLinkToLastBuild: true,
+            allowMissing: true
+        	)
 			
             // --- ACTION 2: Send Email with Correct Offline Report ---
             script {
-                def emailSubject
-                def emailBody
-                // The link now points to the published 'index.html' report page.
-                def reportURL = "${env.BUILD_URL}Test-Execution-Report/"
+            	def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
+            	def emailSubject
+            	def emailBody
 
-                if (currentBuild.currentResult == 'SUCCESS') {
-                    emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                    emailBody = """<p>Build was successful.</p><p><b><a href='${reportURL}'>📄 View Interactive Report in Jenkins</a></b></p>"""
-                } else {
-                    emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                    emailBody = """<p><b>WARNING: The build has failed.</b></p><p><b><a href='${reportURL}'>📄 View Interactive Report in Jenkins</a></b></p>"""
-                }
+           		if (currentBuild.currentResult == 'SUCCESS') {
+                	emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                	emailBody = "<p>Build succeeded.</p><p><a href='${reportURL}'>📄 View Report</a></p>"
+            	} else {
+                	emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                	emailBody = "<p><b>Build failed.</b></p><p><a href='${reportURL}'>📄 View Report</a></p>"
+            	}
                 
-                withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
-                    emailext(
-                        subject: emailSubject,
-                        body: emailBody,
-                        to: RECIPIENT_EMAILS,
-                        mimeType: 'text/html',
-                        // We now attach the correctly named offline report.
-                        attachmentsPattern: 'reports/smoke-report-offline.html'
+            withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+                emailext(
+                    subject: emailSubject,
+                    body: emailBody,
+                    to: RECIPIENT_EMAILS,
+                    mimeType: 'text/html',
+                    attachmentsPattern: 'reports/smoke-report.html'
                     )
                 }
             }

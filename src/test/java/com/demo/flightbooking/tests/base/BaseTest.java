@@ -37,28 +37,27 @@ public class BaseTest {
       }
       logger.info("Logs directory ensured.");
 
-      // Initialize the main ExtentReports object
+      // ✅ Single self-contained report
+      String reportPath = "reports/smoke-report.html";
+      ExtentSparkReporter sparkReporter = new ExtentSparkReporter(reportPath);
+
+      // ✅ Force true offline mode (CSS/JS/Fonts embedded)
+      sparkReporter.config().setOfflineMode(true); 
+      sparkReporter.config().setDocumentTitle("Flight Booking Automation Report");
+      sparkReporter.config().setReportName("Smoke Test Results");
+      sparkReporter.config().setTimeStampFormat("MMM dd, yyyy HH:mm:ss");
+
       extentReports = new ExtentReports();
+      extentReports.attachReporter(sparkReporter);
 
-      // --- REPORTER 1: For the Jenkins UI (Directory-based) ---
-      ExtentSparkReporter onlineReporter = new ExtentSparkReporter("reports/");
-      onlineReporter.config().setDocumentTitle("Flight Booking - Online Report");
-
-      // --- REPORTER 2: For the Email Attachment (Self-contained offline file) ---
-      ExtentSparkReporter offlineReporter = new ExtentSparkReporter("reports/smoke-report-offline.html");
-      offlineReporter.config().setOfflineMode(true); // This is the key for a single, self-contained file
-      offlineReporter.config().setDocumentTitle("Flight Booking - Offline Report");
-
-      // Attach BOTH reporters to the main ExtentReports object
-      extentReports.attachReporter(onlineReporter, offlineReporter);
-
-      // Set system information for the report (applies to both)
       extentReports.setSystemInfo("Tester", ConfigReader.getProperty("tester.name"));
       extentReports.setSystemInfo("OS", System.getProperty("os.name"));
       extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
       extentReports.setSystemInfo("Browser", ConfigReader.getProperty("browser"));
-      logger.info("ExtentReports initialized with both online and offline reporters.");
+
+      logger.info("ExtentReports configured with offline mode.");
   }
+
 
   /**
    * This method runs before each @Test method. It initializes the WebDriver and creates a new test
