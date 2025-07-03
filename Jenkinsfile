@@ -75,23 +75,34 @@ pipeline {
 
         // ✅ Send email with correct offline HTML report attached
         script {
-            def reportURL = "${env.BUILD_URL}Test-Execution-Report/"
-            def emailSubject = currentBuild.currentResult == 'SUCCESS' ?
-                "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}" :
-                "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+    def emailSubject
+    def emailBody
 
-            def emailBody = """
-                <p>${currentBuild.currentResult == 'SUCCESS' ? "Build was successful." : "<b>WARNING:</b> The build has failed."}</p>
-                <p><b><a href='${reportURL}'>📄 View Interactive Report in Jenkins</a></b></p>
-            """
+    def reportURL = "${env.BUILD_URL}Test-Execution-Report/"
 
-            withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
-                emailext(
-                    subject: emailSubject,
-                    body: emailBody,
-                    to: RECIPIENT_EMAILS,
-                    mimeType: 'text/html',
-                    attachmentsPattern: 'reports/extent-report.html' // ✅ Self-contained report
+    if (currentBuild.currentResult == 'SUCCESS') {
+        emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+        emailBody = """
+            <p>✅ Build was successful.</p>
+            <p>📄 <b><a href='${reportURL}'>Click here to view the interactive HTML report in Jenkins</a></b></p>
+            <p>📎 Note: The attached report may not render properly in email clients. Download and open it in a browser.</p>
+        """
+    } else {
+        emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+        emailBody = """
+            <p><b>❌ Build failed.</b></p>
+            <p>📄 <b><a href='${reportURL}'>Click here to view the interactive HTML report in Jenkins</a></b></p>
+            <p>📎 Note: The attached report may not render properly in email clients. Download and open it in a browser.</p>
+        """
+    }
+
+    withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+        emailext(
+            subject: emailSubject,
+            body: emailBody,
+            to: RECIPIENT_EMAILS,
+            mimeType: 'text/html',
+            attachmentsPattern: 'reports/extent-report.html'
                     )
                 }
             }

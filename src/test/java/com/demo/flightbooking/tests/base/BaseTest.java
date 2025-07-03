@@ -37,24 +37,22 @@ public class BaseTest {
       }
       logger.info("Logs directory ensured.");
 
-      // ✅ Self-contained Extent report for Jenkins + email
-      String reportPath = "reports/extent-report.html";
-      ExtentSparkReporter reporter = new ExtentSparkReporter(reportPath);
-      reporter.config().setOfflineMode(true); // 🔥 All CSS/JS/fonts are embedded
-      reporter.config().setDocumentTitle("Flight Booking Automation Report");
-      reporter.config().setReportName("Flight Booking Test Results");
-      reporter.config().setTimeStampFormat("MMM dd, yyyy HH:mm:ss");
-
       extentReports = new ExtentReports();
-      extentReports.attachReporter(reporter);
 
-      // Add metadata
+      // ✅ Generate only one self-contained report
+      ExtentSparkReporter sparkReporter = new ExtentSparkReporter("reports/extent-report.html");
+      sparkReporter.config().setOfflineMode(true); // 🔥 Key for Jenkins + email
+      sparkReporter.config().setDocumentTitle("Flight Booking Report");
+      sparkReporter.config().setReportName("Test Execution Report");
+
+      extentReports.attachReporter(sparkReporter);
+
       extentReports.setSystemInfo("Tester", ConfigReader.getProperty("tester.name"));
       extentReports.setSystemInfo("OS", System.getProperty("os.name"));
       extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
       extentReports.setSystemInfo("Browser", ConfigReader.getProperty("browser"));
 
-      logger.info("ExtentReports (offline mode) initialized.");
+      logger.info("ExtentReports initialized in offline mode.");
   }
 
 
