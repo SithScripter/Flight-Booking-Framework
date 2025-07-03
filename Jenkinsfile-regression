@@ -38,12 +38,19 @@ pipeline {
             
             // These steps can be outside the script block.
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-            publishHTML(reportName: 'Regression Test Report', reportDir: 'reports', reportFiles: 'index.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
+            publishHTML(
+				reportName: 'Regression Test Report', 
+				reportDir: 'reports', 
+				reportFiles: 'index.html', 
+				keepAll: true, 
+				alwaysLinkToLastBuild: true, 
+				allowMissing: true
+				)
             
             // All logic involving variable definitions must be inside a script block.
             script {
                 // We define the specific filenames for the regression run.
-                def reportFile = 'reports/regression-report-offline.html'
+                def reportToAttach = 'reports/regression-report.html'
                 def summaryFile = 'reports/regression-failure-summary.txt'
                 
                 def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
@@ -71,7 +78,7 @@ pipeline {
                         body: emailBody,
                         to: RECIPIENT_EMAILS,
                         mimeType: 'text/html',
-                        attachmentsPattern: reportFile
+                        attachmentsPattern: reportToAttach
                     )
                 }
             }

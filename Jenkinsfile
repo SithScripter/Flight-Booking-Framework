@@ -22,6 +22,28 @@ pipeline {
 
     // The 'stages' block contains the main sequence of work for our pipeline. Each stage is a logical unit of work.
     stages {
+			
+			// Stage 1: for providing LOg Build Info-good for debugging
+		    stage('Log Build Info') {
+        	steps {
+            	// This 'echo' step prints a clear header to the console log for easy reading.
+           		echo "================================================="
+            	echo "          BUILD & TEST METADATA"
+            	echo "================================================="
+            	// Jenkins provides environment variables that give us context about the build.
+            	echo "Job: ${env.JOB_NAME}"
+            	echo "Build Number: ${env.BUILD_NUMBER}"
+            	echo "Workspace: ${env.WORKSPACE}"
+            	// The 'currentBuild' global variable gives us more detailed information about the trigger.
+            	echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
+            	// For Git-based projects, Jenkins provides specific SCM variables.
+            	echo "Branch: ${env.BRANCH_NAME}"
+            	echo "Commit: ${env.GIT_COMMIT}"
+            	echo "================================================="
+        	}
+    	}
+		
+		
         // Stage 1: A standard best practice to ensure the build starts in a clean environment.
         stage('Clean Workspace') {
             steps {
@@ -56,12 +78,14 @@ post {
         always {
             echo 'Archiving reports and emailing results for SMOKE suite...'
             
-            // These steps are fine here because they are standard Jenkins steps.
+            // This archives the entire reports directory, including both smoke-report.html and index.html
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+            
+            // This publishes the index.html file for a perfect view in the Jenkins UI
             publishHTML(
 				reportName: 'Smoke Test Report',
 				reportDir: 'reports',
-				reportFiles: 'index.html',
+				reportFiles: 'index.html',// Correctly pointing to index.html
 				keepAll: true,
 				alwaysLinkToLastBuild: true,
 				allowMissing: true
@@ -69,8 +93,8 @@ post {
             
             // All logic involving variables MUST be inside a script block.
             script {
-                // --- MOVED THESE LINES INSIDE THE SCRIPT BLOCK ---
-                def reportFile = 'reports/smoke-report-offline.html'
+				// Defines the files we will use in this script
+				def reportToAttach = 'reports/smoke-report.html'
                 def summaryFile = 'reports/smoke-failure-summary.txt'
 
                 def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
@@ -98,7 +122,7 @@ post {
                         body: emailBody,
                         to: RECIPIENT_EMAILS,
                         mimeType: 'text/html',
-                        attachmentsPattern: reportFile
+                        attachmentsPattern: reportToAttach
                     )
                 }
             }
