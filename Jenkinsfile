@@ -54,28 +54,32 @@ pipeline {
     // The 'post' block with the final, correct logic for archiving, publishing, and notifications.
     post {
         always {
-        echo 'Archiving Extent Report and emailing results...'
+        echo 'Archiving reports and emailing results for SMOKE suite...'
+        
+        def reportFile = 'reports/smoke-report.html'
+        def summaryFile = 'reports/smoke-failure-summary.txt'
         
         // --- ACTION 1: Archive and Publish ---
 
         // Archive all artifacts in 'reports' folder
-        archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-
-        // Use extent-report.html as the main Jenkins report
+        archiveArtifacts artifacts: reportFile, allowEmptyArchive: true
+        
         publishHTML(
-            reportName: 'Test Execution Report',
-            reportDir: 'reports',
-            reportFiles: 'extent-report.html',
-            keepAll: true,
-            alwaysLinkToLastBuild: true,
-            allowMissing: true
-        )
+			reportName: 'Smoke Test Report',
+			reportDir: 'reports',
+			reportFiles: 'smoke-report.html',
+			keepAll: true,
+			alwaysLinkToLastBuild: true,
+			allowMissing: true
+			)
         
         // --- ACTION 2: Send Email with Correct Offline Report ---
 
         // Send email with link + attachment
         script {
-            def reportURL = "${env.BUILD_URL}Test-Execution-Report/"
+			
+			def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
+            def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
 
             def emailSubject = (currentBuild.currentResult == 'SUCCESS') ?
                 "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}" :
@@ -87,13 +91,13 @@ pipeline {
                 <p>📎 Note: If the attached HTML report appears broken, download and open it in your browser.</p>
             """
 
-            withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
-                emailext(
-                    subject: emailSubject,
-                    body: emailBody,
-                    to: RECIPIENT_EMAILS,
-                    mimeType: 'text/html',
-                    attachmentsPattern: 'reports/extent-report.html'
+                 withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+                    emailext(
+                        subject: emailSubject,
+                        body: emailBody,
+                        to: RECIPIENT_EMAILS,
+                        mimeType: 'text/html',
+                        attachmentsPattern: reportFile
                     )
                 }
             }

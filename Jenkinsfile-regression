@@ -1,48 +1,41 @@
-// Jenkinsfile-regression (For the Nightly Full Regression Suite)
-
 pipeline {
     agent any
-
-    tools {
-        maven 'apache-maven-3.9.9' // Your specific Maven tool name
-        jdk 'JDK 21'             // Your specific JDK tool name
-    }
-
+    tools { /* ... your tools ... */ }
     stages {
-        stage('Clean Workspace') {
-            steps {
-                echo 'Cleaning up the workspace...'
-                cleanWs()
-            }
-        }
-
-        stage('Checkout SCM') {
-            steps {
-                echo 'Checking out code from GitHub...'
-                // This step always fetches the latest commit from the configured branch
-                checkout scm
-            }
-        }
-
+        stage('Clean Workspace') { steps { cleanWs() } }
+        stage('Checkout SCM') { steps { checkout scm } }
         stage('Build & Run Regression Tests') {
             steps {
-                echo 'Building the project and running the FULL regression test suite...'
-                // We activate the 'regression' profile using the -P flag.
-                bat 'mvn clean test -P regression -Denv=PRODUCTION'
+                echo 'Running FULL regression suite...'
+                bat 'mvn clean test -P regression -Denv=QA'
             }
         }
+    }
 
-        stage('Archive Regression Report') {
-            steps {
-                always {
-                    echo 'Preparing and archiving the HTML test report...'
-                    
-                    // --- CORRECTED LOGIC ---
-                    // Step 1: Rename the generic report to a specific one for the regression run.
-                    bat 'if exist reports\\extent-report.html (move reports\\extent-report.html reports\\regression-report.html)'
-                    
-                    // Step 2: Archive the newly named file.
-                    archiveArtifacts artifacts: 'reports/regression-report.html', allowEmptyArchive: true
+    post {
+        always {
+            echo 'Archiving reports and emailing results for REGRESSION suite...'
+
+            def reportFile = 'reports/regression-report.html'
+            def summaryFile = 'reports/regression-failure-summary.txt'
+
+            archiveArtifacts artifacts: reportFile, allowEmptyArchive: true
+            publishHTML(reportName: 'Regression Test Report', reportDir: 'reports', reportFiles: 'regression-report.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
+
+            script {
+                def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
+                def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
+
+                // ... (your existing if/else logic for emailSubject and emailBody using failureSummary) ...
+                
+                withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+                    emailext(
+                        subject: emailSubject,
+                        body: emailBody,
+                        to: RECIPIENT_EMAILS,
+                        mimeType: 'text/html',
+                        attachmentsPattern: reportFile
+                    )
                 }
             }
         }

@@ -9,7 +9,13 @@ import com.demo.flightbooking.utils.DriverManager;
 import com.demo.flightbooking.utils.ExtentManager;
 import com.demo.flightbooking.utils.ScreenshotUtils;
 import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.WebDriver;
@@ -24,6 +30,10 @@ public class BaseTest {
   protected static final Logger logger = LogManager.getLogger(BaseTest.class);
   // The single ExtentReports instance for the entire test suite
   private static ExtentReports extentReports;
+  
+  // --- 1. DECLARATION: A thread-safe list to collect failure messages ---
+  protected static final List<String> failureSummaries =
+      Collections.synchronizedList(new ArrayList<>());
 
   /**
    * This method runs once before the entire test suite starts. It initializes the ExtentReports
@@ -36,18 +46,21 @@ public class BaseTest {
           logsDir.mkdirs();
       }
       logger.info("Logs directory ensured.");
+      
+      // Read the 'test.suite' property passed from the POM, with a fallback name of 'default'.
+      String suiteName = System.getProperty("test.suite", "default");
 
       extentReports = new ExtentReports();
 
-      // ✅ Only one completely self-contained report
-      ExtentSparkReporter sparkReporter = new ExtentSparkReporter("reports/extent-report.html");
-      sparkReporter.config().setOfflineMode(true); // 🔥 Must-have
-      sparkReporter.config().setEncoding("utf-8");
-      sparkReporter.config().setDocumentTitle("Flight Booking Report");
+      // This reporter creates a single self-contained file with a dynamic name for email attachments.
+      ExtentSparkReporter sparkReporter = new ExtentSparkReporter("reports/" + suiteName + "-report.html");
+      sparkReporter.config().setOfflineMode(true);
+      sparkReporter.config().setDocumentTitle("Test Report: " + suiteName.toUpperCase());
       sparkReporter.config().setReportName("Test Execution Report");
-
+      
       extentReports.attachReporter(sparkReporter);
 
+      // Set system information...
       extentReports.setSystemInfo("Tester", ConfigReader.getProperty("tester.name"));
       extentReports.setSystemInfo("OS", System.getProperty("os.name"));
       extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
@@ -80,6 +93,15 @@ public class BaseTest {
 
     if (test != null) {
       if (result.getStatus() == ITestResult.FAILURE) {
+    	  
+    	  // --- 2. POPULATION: If a test fails, we add its details to our list ---
+          String failureMsg =
+              "❌ "
+                  + result.getMethod().getMethodName()
+                  + " FAILED: "
+                  + result.getThrowable().getMessage().split("\n")[0]; // Get first line of error
+          failureSummaries.add(failureMsg);
+    	  
         String screenshotPath =
             ScreenshotUtils.captureScreenshot(driver, result.getMethod().getMethodName());
         String relativePathForReport = "./screenshots/" + new File(screenshotPath).getName();
@@ -105,9 +127,23 @@ public class BaseTest {
    */
   @AfterSuite(alwaysRun = true)
   public void tearDownSuite() {
-    if (extentReports != null) {
-      extentReports.flush();
-      logger.info("ExtentReports flushed to file.");
-    }
-  }
+	    if (extentReports != null) {
+	        extentReports.flush();
+	        logger.info("ExtentReports flushed to file.");
+	    }
+
+	    // --- 3. OUTPUT: After all tests are done, we write the list of failures to a file ---
+	    String suiteName = System.getProperty("test.suite", "default");
+	    if (!failureSummaries.isEmpty()) {
+	        try (PrintWriter out = new PrintWriter("reports/" + suiteName + "-failure-summary.txt")) {
+	            out.println("===== FAILED TEST SUMMARY =====");
+	            for (String fail : failureSummaries) {
+	                out.println(fail);
+	            }
+	            logger.info("Failure summary written to file.");
+	        } catch (IOException e) {
+	            logger.error("Failed to write failure summary.", e);
+	        }
+	    }
+	  }
 }
