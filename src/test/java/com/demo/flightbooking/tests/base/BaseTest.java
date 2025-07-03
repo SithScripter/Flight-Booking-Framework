@@ -63,6 +63,8 @@ public class BaseTest {
       sparkReporter.config().setReportName("Test Execution Report");
       
       extentReports.attachReporter(sparkReporter);
+      logger.info("Generating report at: reports/" + suiteName + "-report.html");
+
 
       // Set system information...
       extentReports.setSystemInfo("Tester", ConfigReader.getProperty("tester.name"));
@@ -137,7 +139,7 @@ public class BaseTest {
       }
 
       String suiteName = System.getProperty("test.suite", "default");
-      String reportFileName = suiteName + "-report-offline.html";
+      String reportFileName = suiteName + "-report.html";  // ✅ Actual generated file
       String summaryFileName = suiteName + "-failure-summary.txt";
 
       // 1️ Write failure summary if needed
@@ -153,9 +155,9 @@ public class BaseTest {
           }
       }
 
-      // 2️ Copy the report to index.html for Jenkins sidebar to show properly
+      // 2️ Copy the report to index.html for Jenkins sidebar
       try {
-          Path source = Paths.get("reports", reportFileName);
+          Path source = Paths.get("reports", reportFileName);  // ✅ smoke-report.html
           Path target = Paths.get("reports", "index.html");
 
           logger.info("Attempting to copy report to index.html");
