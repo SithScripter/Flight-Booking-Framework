@@ -134,7 +134,7 @@ public class BaseTest {
 
       String suiteName = System.getProperty("test.suite", "default");
 
-      // 1️⃣ Write failure summary if any
+      // 1️ Write failure summary if any
       if (!failureSummaries.isEmpty()) {
           try (PrintWriter out = new PrintWriter("reports/" + suiteName + "-failure-summary.txt")) {
               out.println("===== FAILED TEST SUMMARY =====");
@@ -147,7 +147,7 @@ public class BaseTest {
           }
       }
 
-      // 2️⃣ Copy the suite report to index.html so Jenkins publishHTML always works
+      // 2️ Copy the suite report to index.html so Jenkins publishHTML always works
       try {
           java.nio.file.Files.copy(
               java.nio.file.Paths.get("reports/" + suiteName + "-report-offline.html"),
