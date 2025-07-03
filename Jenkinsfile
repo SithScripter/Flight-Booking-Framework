@@ -55,6 +55,8 @@ pipeline {
     post {
         always {
         echo 'Archiving Extent Report and emailing results...'
+        
+        // --- ACTION 1: Archive and Publish ---
 
         // Archive all artifacts in 'reports' folder
         archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
@@ -68,6 +70,8 @@ pipeline {
             alwaysLinkToLastBuild: true,
             allowMissing: true
         )
+        
+        // --- ACTION 2: Send Email with Correct Offline Report ---
 
         // Send email with link + attachment
         script {
