@@ -17,7 +17,7 @@ pipeline {
     // Jenkins will ensure these tools are available in the system's PATH.
     tools {
         maven 'apache-maven-3.9.9' // This name MUST exactly match the name you gave your Maven installation in Jenkins.
-        jdk 'JDK 21'               // This name MUST exactly match the name you gave your JDK installation in Jenkins.
+        jdk 'JDK 21'             // This name MUST exactly match the name you gave your JDK installation in Jenkins.
     }
 
     // The 'stages' block contains the main sequence of work for our pipeline. Each stage is a logical unit of work.
@@ -50,7 +50,7 @@ pipeline {
             }
         }
     } // The 'stages' block ends here.
-
+    
     // The 'post' block with the final, correct logic for archiving, publishing, and notifications.
     post {
         always {
@@ -59,18 +59,7 @@ pipeline {
 
             // First, rename the report file itself so we can find it easily.
             bat 'if exist reports\\extent-report.html (move reports\\extent-report.html reports\\smoke-report.html)'
-
-            // If report is in target folder, copy it and its assets to a consistent reports folder.
-            bat """
-                if exist target\\extent-report.html (
-                    mkdir reports
-                    copy target\\extent-report.html reports\\smoke-report.html
-                    copy target\\*.css reports\\
-                    copy target\\*.js reports\\
-                    copy target\\*.png reports\\
-                )
-            """
-
+            
             // Now, archive the ENTIRE 'reports' directory to preserve CSS/JS assets.
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
@@ -83,31 +72,31 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 allowMissing: true
             )
-
+			
             // --- ACTION 2: Send Email Notification with a Link AND an Attachment ---
             script {
                 def emailSubject
                 def emailBody
-
+                
                 // This is the direct link to the report artifact that Jenkins stores.
                 def reportURL = "${env.BUILD_URL}artifact/reports/smoke-report.html"
 
                 if (currentBuild.currentResult == 'SUCCESS') {
                     emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
                     emailBody = """
-                        <p>Build was successful.</p>
-                        <p><b><a href='${env.BUILD_URL}'>View Build in Jenkins</a></b></p>
-                        <p><b><a href='${reportURL}'>📄 View Smoke Test Report</a></b></p>
+                    <p>Build was successful.</p>
+                    <p><b><a href='${env.BUILD_URL}'>View Build in Jenkins</a></b></p>
+                    <p><b><a href='${reportURL}'>📄 View Smoke Test Report</a></b></p>
                     """
                 } else {
                     emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
                     emailBody = """
-                        <p><b>WARNING: The build has failed.</b></p>
-                        <p><b><a href='${env.BUILD_URL}'>View Build in Jenkins</a></b></p>
-                        <p><b><a href='${reportURL}'>📄 View Smoke Test Report</a></b></p>
+                    <p><b>WARNING: The build has failed.</b></p>
+                    <p><b><a href='${env.BUILD_URL}'>View Build in Jenkins</a></b></p>
+                    <p><b><a href='${reportURL}'>📄 View Smoke Test Report</a></b></p>
                     """
                 }
-
+                
                 withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
                     emailext(
                         subject: emailSubject,
