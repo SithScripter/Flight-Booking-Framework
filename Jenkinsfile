@@ -54,7 +54,7 @@ pipeline {
     // The 'post' block with the final, correct logic for archiving, publishing, and notifications.
     post {
         always {
-            // --- ACTION 1: Archive and Publish the Full Report Folder ---
+            // ---ACTION 1: Archive and Publish the Full Report Folder---
             echo 'Archiving and publishing the full HTML report folder...'
 
             // First, rename the report file itself so we can find it easily.
