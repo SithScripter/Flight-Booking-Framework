@@ -12,6 +12,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -134,27 +138,34 @@ public class BaseTest {
 
       String suiteName = System.getProperty("test.suite", "default");
 
-      // 1️ Write failure summary if any
+      // ✅ Step 1: Write failure summary (if any)
       if (!failureSummaries.isEmpty()) {
           try (PrintWriter out = new PrintWriter("reports/" + suiteName + "-failure-summary.txt")) {
               out.println("===== FAILED TEST SUMMARY =====");
               for (String fail : failureSummaries) {
                   out.println(fail);
               }
-              logger.info("Failure summary written to file.");
+              logger.info("Failure summary written to reports/{}-failure-summary.txt", suiteName);
           } catch (IOException e) {
-              logger.error("Failed to write failure summary.", e);
+              logger.error("Failed to write failure summary for suite: {}", suiteName, e);
           }
       }
 
-      // 2️ Copy the suite report to index.html so Jenkins publishHTML always works
+      // ✅ Step 2: Copy the main report to reports/index.html for Jenkins sidebar UI
       try {
-          java.nio.file.Files.copy(
-              java.nio.file.Paths.get("reports/" + suiteName + "-report-offline.html"),
-              java.nio.file.Paths.get("reports/index.html"),
-              java.nio.file.StandardCopyOption.REPLACE_EXISTING
-          );
-          logger.info("Report copied to reports/index.html for Jenkins UI compatibility.");
+          Path source = Paths.get("reports/" + suiteName + "-report-offline.html");
+          Path target = Paths.get("reports/index.html");
+
+          // Ensure 'reports/' directory exists
+          Files.createDirectories(target.getParent());
+
+          if (Files.exists(source)) {
+              Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+              logger.info("Copied {} to index.html for Jenkins UI compatibility.", source.getFileName());
+          } else {
+              logger.warn("Report file {} does not exist. Skipping copy to index.html.", source.toString());
+          }
+
       } catch (IOException e) {
           logger.error("Failed to copy report to index.html", e);
       }
