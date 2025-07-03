@@ -54,44 +54,44 @@ pipeline {
     // The 'post' block with the final, correct logic for archiving, publishing, and notifications.
     post {
         always {
-             echo 'Archiving and publishing smoke-report.html...'
+        echo 'Archiving reports and publishing results...'
+		
+		// --- ACTION 1: Archive and Publish ---
 
-            // --- ACTION 1: Archive and Publish ---
+        // ✅ Archive everything under reports (screenshots etc.)
+        archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
-        	// ✅ Archive the full report folder (screenshots included)
-        	archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-
-        	// ✅ Publish the self-contained HTML report
-        	publishHTML(
-            reportName: 'Smoke Test Report',
+        // ✅ Publish the self-contained offline HTML report
+        publishHTML(
+            reportName: 'Test Execution Report',
             reportDir: 'reports',
-            reportFiles: 'smoke-report.html',
+            reportFiles: 'extent-report.html',
             keepAll: true,
             alwaysLinkToLastBuild: true,
             allowMissing: true
-        	)
-			
-            // --- ACTION 2: Send Email with Correct Offline Report ---
-            script {
-            	def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
-            	def emailSubject
-            	def emailBody
+        )
+		
+		// --- ACTION 2: Send Email with Correct Offline Report ---
 
-           		if (currentBuild.currentResult == 'SUCCESS') {
-                	emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                	emailBody = "<p>Build succeeded.</p><p><a href='${reportURL}'>📄 View Report</a></p>"
-            	} else {
-                	emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                	emailBody = "<p><b>Build failed.</b></p><p><a href='${reportURL}'>📄 View Report</a></p>"
-            	}
-                
+        // ✅ Send email with correct offline HTML report attached
+        script {
+            def reportURL = "${env.BUILD_URL}Test-Execution-Report/"
+            def emailSubject = currentBuild.currentResult == 'SUCCESS' ?
+                "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}" :
+                "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+
+            def emailBody = """
+                <p>${currentBuild.currentResult == 'SUCCESS' ? "Build was successful." : "<b>WARNING:</b> The build has failed."}</p>
+                <p><b><a href='${reportURL}'>📄 View Interactive Report in Jenkins</a></b></p>
+            """
+
             withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
                 emailext(
                     subject: emailSubject,
                     body: emailBody,
                     to: RECIPIENT_EMAILS,
                     mimeType: 'text/html',
-                    attachmentsPattern: 'reports/smoke-report.html'
+                    attachmentsPattern: 'reports/extent-report.html' // ✅ Self-contained report
                     )
                 }
             }

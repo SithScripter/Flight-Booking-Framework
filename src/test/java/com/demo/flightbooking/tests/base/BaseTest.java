@@ -37,25 +37,24 @@ public class BaseTest {
       }
       logger.info("Logs directory ensured.");
 
-      // ✅ Single self-contained report
-      String reportPath = "reports/smoke-report.html";
-      ExtentSparkReporter sparkReporter = new ExtentSparkReporter(reportPath);
-
-      // ✅ Force true offline mode (CSS/JS/Fonts embedded)
-      sparkReporter.config().setOfflineMode(true); 
-      sparkReporter.config().setDocumentTitle("Flight Booking Automation Report");
-      sparkReporter.config().setReportName("Smoke Test Results");
-      sparkReporter.config().setTimeStampFormat("MMM dd, yyyy HH:mm:ss");
+      // ✅ Self-contained Extent report for Jenkins + email
+      String reportPath = "reports/extent-report.html";
+      ExtentSparkReporter reporter = new ExtentSparkReporter(reportPath);
+      reporter.config().setOfflineMode(true); // 🔥 All CSS/JS/fonts are embedded
+      reporter.config().setDocumentTitle("Flight Booking Automation Report");
+      reporter.config().setReportName("Flight Booking Test Results");
+      reporter.config().setTimeStampFormat("MMM dd, yyyy HH:mm:ss");
 
       extentReports = new ExtentReports();
-      extentReports.attachReporter(sparkReporter);
+      extentReports.attachReporter(reporter);
 
+      // Add metadata
       extentReports.setSystemInfo("Tester", ConfigReader.getProperty("tester.name"));
       extentReports.setSystemInfo("OS", System.getProperty("os.name"));
       extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
       extentReports.setSystemInfo("Browser", ConfigReader.getProperty("browser"));
 
-      logger.info("ExtentReports configured with offline mode.");
+      logger.info("ExtentReports (offline mode) initialized.");
   }
 
 
