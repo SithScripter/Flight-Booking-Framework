@@ -52,46 +52,47 @@ pipeline {
     } // The 'stages' block ends here.
     
     // The 'post' block with the final, correct logic for archiving, publishing, and notifications.
-    post {
+post {
         always {
-        echo 'Archiving reports and emailing results for SMOKE suite...'
-        
-        def reportFile = 'reports/smoke-report.html'
-        def summaryFile = 'reports/smoke-failure-summary.txt'
-        
-        // --- ACTION 1: Archive and Publish ---
+            echo 'Archiving reports and emailing results for SMOKE suite...'
+            
+            // These steps are fine here because they are standard Jenkins steps.
+            archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+            publishHTML(
+				reportName: 'Smoke Test Report',
+				reportDir: 'reports',
+				reportFiles: 'index.html',
+				keepAll: true,
+				alwaysLinkToLastBuild: true,
+				allowMissing: true
+				)
+            
+            // All logic involving variables MUST be inside a script block.
+            script {
+                // --- MOVED THESE LINES INSIDE THE SCRIPT BLOCK ---
+                def reportFile = 'reports/smoke-report-offline.html'
+                def summaryFile = 'reports/smoke-failure-summary.txt'
 
-        // Archive all artifacts in 'reports' folder
-        archiveArtifacts artifacts: reportFile, allowEmptyArchive: true
-        
-        publishHTML(
-			reportName: 'Smoke Test Report',
-			reportDir: 'reports',
-			reportFiles: 'smoke-report.html',
-			keepAll: true,
-			alwaysLinkToLastBuild: true,
-			allowMissing: true
-			)
-        
-        // --- ACTION 2: Send Email with Correct Offline Report ---
+                def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
+                def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
 
-        // Send email with link + attachment
-        script {
-			
-			def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
-            def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
+                def emailSubject
+                def emailBody
 
-            def emailSubject = (currentBuild.currentResult == 'SUCCESS') ?
-                "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}" :
-                "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                if (currentBuild.currentResult == 'SUCCESS') {
+                    emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailBody = """<p>Build was successful.</p><p><b><a href='${reportURL}'>📄 View Test Report in Jenkins</a></b></p>"""
+                } else {
+                    emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailBody = """
+                        <p><b>WARNING: The build has failed.</b></p>
+                        <p><b>Failure Summary:</b></p>
+                        <pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
+                        <p><b><a href='${reportURL}'>📄 View Full Report in Jenkins</a></b></p>
+                    """
+                }
 
-            def emailBody = """
-                <p><b>Build Result: ${currentBuild.currentResult}</b></p>
-                <p><b><a href='${reportURL}'>📄 Click here to view the HTML report in Jenkins</a></b></p>
-                <p>📎 Note: If the attached HTML report appears broken, download and open it in your browser.</p>
-            """
-
-                 withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+                withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
                     emailext(
                         subject: emailSubject,
                         body: emailBody,

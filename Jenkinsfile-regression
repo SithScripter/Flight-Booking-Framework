@@ -1,33 +1,70 @@
 pipeline {
+    // Agent, tools, and parameters can be defined here if needed for this specific pipeline.
+    // For simplicity, we'll assume the same agent and tools.
     agent any
-    tools { /* ... your tools ... */ }
+
+    tools {
+        maven 'apache-maven-3.9.9'
+        jdk 'JDK 21'
+    }
+
     stages {
-        stage('Clean Workspace') { steps { cleanWs() } }
-        stage('Checkout SCM') { steps { checkout scm } }
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Checkout SCM') {
+            steps {
+                checkout scm
+            }
+        }
+
+        // This stage specifically runs the 'regression' profile.
         stage('Build & Run Regression Tests') {
             steps {
                 echo 'Running FULL regression suite...'
+                // We activate the 'regression' profile and can set a default environment like QA.
                 bat 'mvn clean test -P regression -Denv=QA'
             }
         }
     }
 
+    // This post block is now corrected and tailored for the regression run.
     post {
         always {
             echo 'Archiving reports and emailing results for REGRESSION suite...'
-
-            def reportFile = 'reports/regression-report.html'
-            def summaryFile = 'reports/regression-failure-summary.txt'
-
-            archiveArtifacts artifacts: reportFile, allowEmptyArchive: true
-            publishHTML(reportName: 'Regression Test Report', reportDir: 'reports', reportFiles: 'regression-report.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
-
+            
+            // These steps can be outside the script block.
+            archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+            publishHTML(reportName: 'Regression Test Report', reportDir: 'reports', reportFiles: 'index.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
+            
+            // All logic involving variable definitions must be inside a script block.
             script {
+                // We define the specific filenames for the regression run.
+                def reportFile = 'reports/regression-report-offline.html'
+                def summaryFile = 'reports/regression-failure-summary.txt'
+                
                 def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
                 def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
 
-                // ... (your existing if/else logic for emailSubject and emailBody using failureSummary) ...
-                
+                def emailSubject
+                def emailBody
+
+                if (currentBuild.currentResult == 'SUCCESS') {
+                    emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailBody = """<p>Nightly regression build was successful.</p><p><b><a href='${reportURL}'>📄 View Full Regression Report</a></b></p>"""
+                } else {
+                    emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailBody = """
+                        <p><b>WARNING: The nightly regression build has failed.</b></p>
+                        <p><b>Failure Summary:</b></p>
+                        <pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
+                        <p><b><a href='${reportURL}'>📄 View Full Regression Report</a></b></p>
+                    """
+                }
+
                 withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
                     emailext(
                         subject: emailSubject,
