@@ -61,7 +61,7 @@ post {
             publishHTML(
 				reportName: 'Smoke Test Report',
 				reportDir: 'reports',
-				reportFiles: 'smoke-report.html',
+				reportFiles: 'index.html',
 				keepAll: true,
 				alwaysLinkToLastBuild: true,
 				allowMissing: true

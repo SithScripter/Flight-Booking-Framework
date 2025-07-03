@@ -127,23 +127,36 @@ public class BaseTest {
    */
   @AfterSuite(alwaysRun = true)
   public void tearDownSuite() {
-	    if (extentReports != null) {
-	        extentReports.flush();
-	        logger.info("ExtentReports flushed to file.");
-	    }
+      if (extentReports != null) {
+          extentReports.flush();
+          logger.info("ExtentReports flushed to file.");
+      }
 
-	    // --- 3. OUTPUT: After all tests are done, we write the list of failures to a file ---
-	    String suiteName = System.getProperty("test.suite", "default");
-	    if (!failureSummaries.isEmpty()) {
-	        try (PrintWriter out = new PrintWriter("reports/" + suiteName + "-failure-summary.txt")) {
-	            out.println("===== FAILED TEST SUMMARY =====");
-	            for (String fail : failureSummaries) {
-	                out.println(fail);
-	            }
-	            logger.info("Failure summary written to file.");
-	        } catch (IOException e) {
-	            logger.error("Failed to write failure summary.", e);
-	        }
-	    }
-	  }
+      String suiteName = System.getProperty("test.suite", "default");
+
+      // 1️⃣ Write failure summary if any
+      if (!failureSummaries.isEmpty()) {
+          try (PrintWriter out = new PrintWriter("reports/" + suiteName + "-failure-summary.txt")) {
+              out.println("===== FAILED TEST SUMMARY =====");
+              for (String fail : failureSummaries) {
+                  out.println(fail);
+              }
+              logger.info("Failure summary written to file.");
+          } catch (IOException e) {
+              logger.error("Failed to write failure summary.", e);
+          }
+      }
+
+      // 2️⃣ Copy the suite report to index.html so Jenkins publishHTML always works
+      try {
+          java.nio.file.Files.copy(
+              java.nio.file.Paths.get("reports/" + suiteName + "-report-offline.html"),
+              java.nio.file.Paths.get("reports/index.html"),
+              java.nio.file.StandardCopyOption.REPLACE_EXISTING
+          );
+          logger.info("Report copied to reports/index.html for Jenkins UI compatibility.");
+      } catch (IOException e) {
+          logger.error("Failed to copy report to index.html", e);
+      }
+  }
 }
