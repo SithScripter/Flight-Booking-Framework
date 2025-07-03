@@ -39,9 +39,10 @@ public class BaseTest {
 
       extentReports = new ExtentReports();
 
-      // ✅ Generate only one self-contained report
+      // ✅ Only one completely self-contained report
       ExtentSparkReporter sparkReporter = new ExtentSparkReporter("reports/extent-report.html");
-      sparkReporter.config().setOfflineMode(true); // 🔥 Key for Jenkins + email
+      sparkReporter.config().setOfflineMode(true); // 🔥 Must-have
+      sparkReporter.config().setEncoding("utf-8");
       sparkReporter.config().setDocumentTitle("Flight Booking Report");
       sparkReporter.config().setReportName("Test Execution Report");
 
@@ -51,8 +52,6 @@ public class BaseTest {
       extentReports.setSystemInfo("OS", System.getProperty("os.name"));
       extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
       extentReports.setSystemInfo("Browser", ConfigReader.getProperty("browser"));
-
-      logger.info("ExtentReports initialized in offline mode.");
   }
 
 

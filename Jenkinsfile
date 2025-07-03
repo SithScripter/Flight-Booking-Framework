@@ -54,14 +54,12 @@ pipeline {
     // The 'post' block with the final, correct logic for archiving, publishing, and notifications.
     post {
         always {
-        echo 'Archiving reports and publishing results...'
-		
-		// --- ACTION 1: Archive and Publish ---
+        echo 'Archiving Extent Report and emailing results...'
 
-        // ✅ Archive everything under reports (screenshots etc.)
+        // Archive all artifacts in 'reports' folder
         archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
-        // ✅ Publish the self-contained offline HTML report
+        // Use extent-report.html as the main Jenkins report
         publishHTML(
             reportName: 'Test Execution Report',
             reportDir: 'reports',
@@ -70,39 +68,28 @@ pipeline {
             alwaysLinkToLastBuild: true,
             allowMissing: true
         )
-		
-		// --- ACTION 2: Send Email with Correct Offline Report ---
 
-        // ✅ Send email with correct offline HTML report attached
+        // Send email with link + attachment
         script {
-    def emailSubject
-    def emailBody
+            def reportURL = "${env.BUILD_URL}Test-Execution-Report/"
 
-    def reportURL = "${env.BUILD_URL}Test-Execution-Report/"
+            def emailSubject = (currentBuild.currentResult == 'SUCCESS') ?
+                "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}" :
+                "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
 
-    if (currentBuild.currentResult == 'SUCCESS') {
-        emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-        emailBody = """
-            <p>✅ Build was successful.</p>
-            <p>📄 <b><a href='${reportURL}'>Click here to view the interactive HTML report in Jenkins</a></b></p>
-            <p>📎 Note: The attached report may not render properly in email clients. Download and open it in a browser.</p>
-        """
-    } else {
-        emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-        emailBody = """
-            <p><b>❌ Build failed.</b></p>
-            <p>📄 <b><a href='${reportURL}'>Click here to view the interactive HTML report in Jenkins</a></b></p>
-            <p>📎 Note: The attached report may not render properly in email clients. Download and open it in a browser.</p>
-        """
-    }
+            def emailBody = """
+                <p><b>Build Result: ${currentBuild.currentResult}</b></p>
+                <p><b><a href='${reportURL}'>📄 Click here to view the HTML report in Jenkins</a></b></p>
+                <p>📎 Note: If the attached HTML report appears broken, download and open it in your browser.</p>
+            """
 
-    withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
-        emailext(
-            subject: emailSubject,
-            body: emailBody,
-            to: RECIPIENT_EMAILS,
-            mimeType: 'text/html',
-            attachmentsPattern: 'reports/extent-report.html'
+            withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+                emailext(
+                    subject: emailSubject,
+                    body: emailBody,
+                    to: RECIPIENT_EMAILS,
+                    mimeType: 'text/html',
+                    attachmentsPattern: 'reports/extent-report.html'
                     )
                 }
             }
