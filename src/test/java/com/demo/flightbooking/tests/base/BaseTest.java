@@ -133,41 +133,45 @@ public class BaseTest {
   public void tearDownSuite() {
       if (extentReports != null) {
           extentReports.flush();
-          logger.info("ExtentReports flushed to file.");
+          logger.info("✅ ExtentReports flushed to file.");
       }
 
       String suiteName = System.getProperty("test.suite", "default");
+      String reportFileName = suiteName + "-report-offline.html";
+      String summaryFileName = suiteName + "-failure-summary.txt";
 
-      // ✅ Step 1: Write failure summary (if any)
+      // 1️ Write failure summary if needed
       if (!failureSummaries.isEmpty()) {
-          try (PrintWriter out = new PrintWriter("reports/" + suiteName + "-failure-summary.txt")) {
+          try (PrintWriter out = new PrintWriter("reports/" + summaryFileName)) {
               out.println("===== FAILED TEST SUMMARY =====");
               for (String fail : failureSummaries) {
                   out.println(fail);
               }
-              logger.info("Failure summary written to reports/{}-failure-summary.txt", suiteName);
+              logger.info("✅ Failure summary written: " + summaryFileName);
           } catch (IOException e) {
-              logger.error("Failed to write failure summary for suite: {}", suiteName, e);
+              logger.error("❌ Failed to write failure summary", e);
           }
       }
 
-      // ✅ Step 2: Copy the main report to reports/index.html for Jenkins sidebar UI
+      // 2️ Copy the report to index.html for Jenkins sidebar to show properly
       try {
-          Path source = Paths.get("reports/" + suiteName + "-report-offline.html");
-          Path target = Paths.get("reports/index.html");
+          Path source = Paths.get("reports", reportFileName);
+          Path target = Paths.get("reports", "index.html");
 
-          // Ensure 'reports/' directory exists
-          Files.createDirectories(target.getParent());
+          logger.info("Attempting to copy report to index.html");
+          logger.info("Source: " + source.toAbsolutePath());
+          logger.info("Target: " + target.toAbsolutePath());
 
-          if (Files.exists(source)) {
-              Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
-              logger.info("Copied {} to index.html for Jenkins UI compatibility.", source.getFileName());
-          } else {
-              logger.warn("Report file {} does not exist. Skipping copy to index.html.", source.toString());
+          if (!Files.exists(source)) {
+              logger.error("❌ Source report file not found: " + source.toString());
+              return;
           }
 
+          Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+          logger.info("✅ Report copied to index.html for Jenkins compatibility.");
+
       } catch (IOException e) {
-          logger.error("Failed to copy report to index.html", e);
+          logger.error("❌ Failed to copy report to index.html", e);
       }
   }
 }
