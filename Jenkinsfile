@@ -93,23 +93,60 @@ post {
 			
 			// All logic involving variables MUST be inside a script block.
 			script {
-			// --- ACTION 3: Securely Update Qase.io ---
-			echo 'Attempting to publish results to Qase.io...'
-			withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
-    		def status = bat script: """
-        	curl -X POST "https://api.qase.io/v1/result/FB/testng" ^
-        	-H "accept: application/json" ^
-        	-H "Content-Type: multipart/form-data" ^
-        	-H "Token: %QASE_TOKEN%" ^
-        	-F "file=@target/surefire-reports/testng-results.xml"
-    		""", returnStatus: true
+                // We wrap this in a try/catch so a failure to update Qase does not fail the build.
+                try {
+                    echo '--- Starting Qase.io Integration ---'
+                    withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
+                        
+                        // --- STEP 1: Create a new Test Run in Qase ---
+                        // This API call creates a new run container and returns a JSON response with its ID.
+                        // IMPORTANT: Replace 'YOUR_PROJECT_CODE' and the case IDs [1, 2] below.
+                        echo '1. Creating a new Test Run...'
+                        def createRunResponse = bat(
+                            script: """
+                                curl -s -X POST "https://api.qase.io/v1/run/YOUR_PROJECT_CODE" ^
+                                -H "accept: application/json" ^
+                                -H "Content-Type: application/json" ^
+                                -H "Token: %QASE_TOKEN%" ^
+                                -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[1]}"
+                            """,
+                            returnStdout: true
+                        ).trim()
 
-    		if (status != 0) {
-        	echo "⚠️ Warning: Failed to update Qase.io. Curl returned status ${status}"
-    		} else {
-        	echo '✅ Successfully published results to Qase.io.'
-    			}
-			}
+                        // This step parses the JSON response to extract the new run ID.
+                        // It requires the "Pipeline Utility Steps" plugin (for readJSON).
+                        def responseJson = readJSON text: createRunResponse
+                        def runId = responseJson.result.id
+
+                        // We only proceed if we successfully got a valid Run ID.
+                        if (runId) {
+                            echo "✅ Successfully created Qase Test Run with ID: ${runId}"
+
+                            // --- STEP 2: Upload test results to the new Test Run ---
+                            echo "2. Uploading results to Run ID: ${runId}..."
+                            def uploadStatus = bat(
+                                script: """
+                                    curl -X POST "https://api.qase.io/v1/result/FB/${runId}/testng" ^
+                                    -H "accept: application/json" ^
+                                    -H "Content-Type: multipart/form-data" ^
+                                    -H "Token: %QASE_TOKEN%" ^
+                                    -F "file=@target/surefire-reports/testng-results.xml"
+                                """,
+                                returnStatus: true
+                            )
+
+                            if (uploadStatus != 0) {
+                                echo "⚠️ Warning: Failed to upload results to Qase.io. Curl returned status ${uploadStatus}"
+                            } else {
+                                echo '✅ Successfully published results to Qase.io.'
+                            }
+                        } else {
+                           echo "⚠️ Warning: Could not create Qase Test Run or get a valid Run ID from the response."
+                        }
+                    }
+                } catch (Exception err) {
+                    echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
+                }
 				
             // Email logic
 				// Defines the files we will use in this script
