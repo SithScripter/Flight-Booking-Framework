@@ -1,205 +1,143 @@
-pipeline
-{
-	// 'agent any' specifies that this pipeline can run on any available Jenkins agent machine.
-	// For a local setup, this means it will run on the main Jenkins instance.
-	agent any
+pipeline {
+    agent any
+    parameters {
+        choice(
+            name: 'TARGET_ENVIRONMENT',
+            choices: ['PRODUCTION', 'STAGING', 'QA'],
+            description: 'Select the target environment to run the tests against.'
+        )
+    }
+    tools {
+        maven 'apache-maven-3.9.9'
+        jdk 'JDK 21'
+    }
+    stages {
+        stage('Log Build Info') {
+            steps {
+                echo "================================================="
+                echo "          BUILD & TEST METADATA (SMOKE)"
+                echo "================================================="
+                echo "Job: ${env.JOB_NAME}"
+                echo "Build Number: ${env.BUILD_NUMBER}"
+                echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
+                echo "Branch: ${env.BRANCH_NAME}"
+                echo "Commit: ${env.GIT_COMMIT}"
+                echo "================================================="
+            }
+        }
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Checkout SCM') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Build & Run Smoke Tests') {
+            steps {
+                echo "Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
+                // This command correctly uses the smoke profile and passes the suite name
+                bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke"
+            }
+        }
+    }
+    post {
+        always {
+            echo 'Archiving reports, publishing to UI, and sending notifications for SMOKE suite...'
+            
+            // Archive the entire reports directory
+            archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
-	// The 'parameters' block defines interactive inputs that create a form on the "Build with Parameters" page.
-	parameters
-	{
-		// This 'choice' parameter creates a dropdown menu for environment selection.
-		choice(
-				name: 'TARGET_ENVIRONMENT', // The name of the variable that will hold the user's selected value.
-				choices: ['PRODUCTION', 'STAGING', 'QA'], // The list of options. 'QA' will be the default as it's first.
-				description: 'Select the target environment to run the tests against.'
-				)
-	}
+            // Publish the index.html from within the 'smoke' sub-directory
+            publishHTML(
+                reportName: 'Smoke Test Report',
+                reportDir: 'reports/smoke',
+                reportFiles: 'index.html',
+                keepAll: true,
+                alwaysLinkToLastBuild: true,
+                allowMissing: true
+            )
+            
+            script {
+                // --- Qase.io Integration Logic ---
+                try {
+                    echo '--- Starting Qase.io Integration ---'
+                    def runId
+                    withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
+                        
+                        echo '1. Creating a new Test Run...'
+                        bat """
+                            curl -s -X POST "https://api.qase.io/v1/run/FB" ^
+                            -H "accept: application/json" ^
+                            -H "Content-Type: application/json" ^
+                            -H "Token: %QASE_TOKEN%" ^
+                            -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[1, 2]}" ^
+                            -o response.json
+                        """
+                        def responseJson = readJSON file: 'response.json'
+                        
+                        if (responseJson.status) {
+                            runId = responseJson.result.id
+                            echo "✅ Successfully created Qase Test Run with ID: ${runId}"
+                            
+                            echo "2. Uploading TestNG results to Run ID: ${runId}..."
+                            bat """
+                                curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
+                                -H "accept: application/json" ^
+                                -H "Content-Type: multipart/form-data" ^
+                                -H "Token: %QASE_TOKEN%" ^
+                                -F "file=@target/surefire-reports/testng-results.xml"
+                            """
 
-	// The 'tools' block specifies which pre-configured tools from Jenkins Global Tool Configuration are required for this pipeline.
-	// Jenkins will ensure these tools are available in the system's PATH.
-	tools
-	{
-		maven 'apache-maven-3.9.9' // This name MUST exactly match the name you gave your Maven installation in Jenkins.
-		jdk 'JDK 21'             // This name MUST exactly match the name you gave your JDK installation in Jenkins.
-	}
+                            echo "3. Marking Qase Test Run as complete..."
+                            bat """
+                                curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
+                                -H "accept: application/json" ^
+                                -H "Token: %QASE_TOKEN%"
+                            """
+                             echo "✅ Qase Test Run ${runId} marked as complete."
+                        } else {
+                           echo "⚠️ Warning: Qase API returned an error during run creation. Response: ${responseJson}"
+                        }
+                    }
+                } catch (Exception err) {
+                    echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
+                }
 
-	// The 'stages' block contains the main sequence of work for our pipeline. Each stage is a logical unit of work.
-	stages
-	{
+                // --- Email Notification Logic ---
+                def reportToAttach = 'reports/smoke/smoke-report.html'
+                def summaryFile = 'reports/smoke/smoke-failure-summary.txt'
+                def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : ""
+                def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
 
-		// Stage 1: for providing LOg Build Info-good for debugging
-		stage('Log Build Info')
-		{
-			steps
-			{
-				// This 'echo' step prints a clear header to the console log for easy reading.
-				echo "================================================="
-				echo "          BUILD & TEST METADATA"
-				echo "================================================="
-				// Jenkins provides environment variables that give us context about the build.
-				echo "Job: ${env.JOB_NAME}"
-				echo "Build Number: ${env.BUILD_NUMBER}"
-				echo "Workspace: ${env.WORKSPACE}"
-				// The 'currentBuild' global variable gives us more detailed information about the trigger.
-				echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
-				// For Git-based projects, Jenkins provides specific SCM variables.
-				echo "Branch: ${env.BRANCH_NAME}"
-				echo "Commit: ${env.GIT_COMMIT}"
-				echo "================================================="
-			}
-		}
+                def emailSubject
+                def emailBody
 
+                if (currentBuild.currentResult == 'SUCCESS') {
+                    emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailBody = """<p>Build was successful.</p><p><b><a href='${reportURL}'>📄 View Test Report in Jenkins</a></b></p>"""
+                } else {
+                    emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailBody = """
+                        <p><b>WARNING: The build has failed.</b></p>
+                        <p><b>Failure Summary:</b></p>
+                        <pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
+                        <p><b><a href='${reportURL}'>📄 View Full Report in Jenkins</a></b></p>
+                    """
+                }
 
-		// Stage 1: A standard best practice to ensure the build starts in a clean environment.
-		stage('Clean Workspace')
-		{
-			steps
-			{
-				// 'cleanWs()' is a built-in Jenkins step that deletes all files from the workspace from any previous builds.
-				cleanWs()
-			}
-		}
-
-		// Stage 2: Clones or pulls the latest source code from the repository configured in the Jenkins job UI.
-		stage('Checkout SCM')
-		{
-			steps
-			{
-				// 'checkout scm' is a built-in step that uses the Source Control Management configuration from the job's UI page.
-				checkout scm
-			}
-		}
-
-		// Stage 3: Compiles the code and executes our test suite using Maven.
-		stage('Build & Run Smoke Tests')
-		{
-			steps
-			{
-				// 'echo' prints a message to the Jenkins console log for better traceability.
-				echo "Running tests on environment selected by user: ${params.TARGET_ENVIRONMENT}"
-
-				// 'bat' executes a Windows batch command. For Linux/macOS agents, you would use 'sh'.
-				// We dynamically insert the user's selected parameter value into the Maven command.
-				bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT}"
-			}
-		}
-	} // The 'stages' block ends here.
-
-	// The 'post' block with the final, correct logic for archiving, publishing, and notifications.
-	post
-	{
-		always
-		{
-			echo 'Archiving reports and emailing results for SMOKE suite...'
-
-			// This archives the entire reports directory, including both smoke-report.html and index.html
-			archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-
-			// This publishes the index.html file for a perfect view in the Jenkins UI
-			publishHTML(
-					reportName: 'Smoke Test Report',
-					reportDir: 'reports/smoke',
-					reportFiles: 'index.html',// Correctly pointing to index.html
-					keepAll: true,
-					alwaysLinkToLastBuild: true,
-					allowMissing: true
-					)
-
-			// All logic involving variables MUST be inside a script block.
-			script
-			{
-				try
-				{
-					echo '--- Starting Qase.io Integration ---'
-					def runId
-
-					withCredentials([
-						string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')
-					])
-					{
-						// Step 1: Create the Test Run
-						echo '1. Creating a new Test Run...'
-						bat """
-                curl -s -X POST "https://api.qase.io/v1/run/FB" ^
-                -H "accept: application/json" ^
-                -H "Content-Type: application/json" ^
-                -H "Token: %QASE_TOKEN%" ^
-                -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
-                -o response.json
-            """
-						def responseJson = readJSON file: 'response.json'
-
-						if (responseJson.status)
-						{
-							runId = responseJson.result.id
-							echo "✅ Successfully created Qase Test Run with ID: ${runId}"
-
-							// Step 2: Upload TestNG results to the correct endpoint using PATCH
-							echo "2. Uploading TestNG results to Run ID: ${runId}..."
-							bat """
-                    curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
-                    -H "accept: application/json" ^
-                    -H "Content-Type: multipart/form-data" ^
-                    -H "Token: %QASE_TOKEN%" ^
-                    -F "file=@target/surefire-reports/testng-results.xml"
-                """
-							echo "✅ Test results uploaded to Qase.io."
-
-							// Step 3: Mark the Test Run as complete
-							echo "3. Marking Qase Test Run as complete..."
-							bat """
-                    curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
-                    -H "accept: application/json" ^
-                    -H "Token: %QASE_TOKEN%"
-                """
-							echo "✅ Qase Test Run ${runId} marked as complete."
-						} else
-						{
-							echo "⚠️ Warning: Qase API returned an error during run creation. Response: ${responseJson}"
-						}
-					}
-				} catch (Exception err)
-				{
-					echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
-				}
-
-				// ✅ Email Logic (No attachment, clickable link only)
-				def reportToAttach = 'reports/smoke/smoke-report.html'
-				def summaryFile = 'reports/smoke/smoke-failure-summary.txt'
-//				def summaryFile = 'reports/smoke-failure-summary.txt'
-//				def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
-				def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
-
-				def emailSubject
-				def emailBody
-
-				if (currentBuild.currentResult == 'SUCCESS')
-				{
-					emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-					emailBody = """<p>Build was successful.</p><p><b><a href='${reportURL}'>📄 View Test Report in Jenkins</a></b></p>"""
-				} else
-				{
-					emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-					emailBody = """
-            <p><b>WARNING: The build has failed.</b></p>
-            <p><b>Failure Summary:</b></p>
-            <pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
-            <p><b><a href='${reportURL}'>📄 View Full Report in Jenkins</a></b></p>
-        """
-				}
-
-				withCredentials([
-					string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')
-				])
-				{
-					emailext(
-							subject: emailSubject,
-							body: emailBody,
-							to: RECIPIENT_EMAILS,
-							mimeType: 'text/html'
-							)
-				}
-			}
-		}
-	}
+                withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+                    emailext(
+                        subject: emailSubject,
+                        body: emailBody,
+                        to: RECIPIENT_EMAILS,
+                        mimeType: 'text/html',
+                        attachmentsPattern: reportToAttach
+                    )
+                }
+            }
+        }
+    }
 }

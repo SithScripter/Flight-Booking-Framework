@@ -36,8 +36,8 @@ pipeline {
         stage('Build & Run Regression Tests') {
             steps {
                 echo "Running FULL regression suite..."
-                // This command now activates the 'regression' profile
-                bat 'mvn clean test -P regression -Denv=QA'
+                // This command correctly activates the 'regression' profile and sets the dynamic suite name
+                bat 'mvn clean test -P regression -Denv=QA -Dtest.suite=regression'
             }
         }
     }
@@ -49,7 +49,7 @@ pipeline {
             
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
             publishHTML(
-                reportName: 'Regression Test Report', // Updated for regression
+                reportName: 'Regression Test Report',
                 reportDir: 'reports',
                 reportFiles: 'index.html',
                 keepAll: true,
@@ -58,12 +58,12 @@ pipeline {
             )
             
             script {
+                // --- Qase.io Integration ---
                 try {
                     def runId
                     withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
-                        
                         echo '1. Creating a new Test Run in Qase...'
-                        // For the regression run, we will omit the 'cases' field to include ALL test cases in the project.
+                        // For the regression run, we omit the 'cases' field to include ALL test cases.
                         bat """
                             curl -s -X POST "https://api.qase.io/v1/run/FB" ^
                             -H "accept: application/json" ^
@@ -78,8 +78,7 @@ pipeline {
                             runId = responseJson.result.id
                             echo "✅ Successfully created Qase Test Run with ID: ${runId}"
                             
-                            // Upload results to the new Run ID
-                            echo "2. Uploading results to Run ID: ${runId}..."
+                            echo "2. Uploading TestNG results..."
                             bat """
                                 curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
                                 -H "accept: application/json" ^
@@ -87,32 +86,26 @@ pipeline {
                                 -H "Token: %QASE_TOKEN%" ^
                                 -F "file=@target/surefire-reports/testng-results.xml"
                             """
-
-                            // Mark the Qase Run as complete
+                            
                             echo "3. Marking Qase Test Run as complete..."
                             bat """
                                 curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
                                 -H "accept: application/json" ^
                                 -H "Token: %QASE_TOKEN%"
                             """
-                            echo "✅ Qase Test Run ${runId} marked as complete."
+                             echo "✅ Qase Test Run ${runId} marked as complete."
                         } else {
-                           echo "⚠️ Warning: Qase API returned an error during run creation. Response: ${responseJson}"
+                           echo "⚠️ Warning: Qase API returned an error during run creation: ${responseJson}"
                         }
                     }
                 } catch (Exception err) {
-                    echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
+                    echo "⚠️ Warning: An exception occurred during Qase.io integration: ${err.getMessage()}"
                 }
 
-                // --- Email Logic ---
-				
-				def reportToAttach = 'reports/regression-report.html'
-				def summaryFile = 'reports/regression-failure-summary.txt'
-				def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
-				
-//                def reportFile = 'reports/regression-report.html'
-//                def summaryFile = 'reports/regression-failure-summary.txt'
-//                def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
+                // --- Email Notification Logic ---
+                def reportToAttach = 'reports/regression-report.html'
+                def summaryFile = 'reports/regression-failure-summary.txt'
+                def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : ""
                 def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
 
                 def emailSubject
@@ -137,7 +130,7 @@ pipeline {
                         body: emailBody,
                         to: RECIPIENT_EMAILS,
                         mimeType: 'text/html',
-                        attachmentsPattern: reportFile
+                        attachmentsPattern: reportToAttach
                     )
                 }
             }
