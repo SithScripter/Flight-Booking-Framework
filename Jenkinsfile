@@ -90,30 +90,29 @@ post {
 				alwaysLinkToLastBuild: true,
 				allowMissing: true
 				)
-				
+			
+			// All logic involving variables MUST be inside a script block.
+			script {
 			// --- ACTION 3: Securely Update Qase.io ---
-            try {
-                echo 'Attempting to publish results to Qase.io...'
-                // Use the 'withCredentials' block to securely access the API token.
-                withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
-                    // This command uses curl to POST the TestNG results file to the Qase API.
-                    // Make sure to replace 'YOUR_PROJECT_CODE' with your actual code from Qase.
-                    bat """
-                        curl -X POST "https://api.qase.io/v1/result/FB/testng" ^
-                        -H "accept: application/json" ^
-                        -H "Content-Type: multipart/form-data" ^
-                        -H "Token: %QASE_TOKEN%" ^
-                        -F "file=@target/surefire-reports/testng-results.xml"
-                    """
-                }
-                echo 'Successfully published results to Qase.io.'
-            } catch (Exception err) {
-                // This try/catch ensures that if the Qase update fails, it doesn't fail the whole build.
-                echo "Warning: Failed to update Qase.io. Error: ${err.getMessage()}"
-            }
+			echo 'Attempting to publish results to Qase.io...'
+			withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
+    		def status = bat script: """
+        	curl -X POST "https://api.qase.io/v1/result/FB/testng" ^
+        	-H "accept: application/json" ^
+        	-H "Content-Type: multipart/form-data" ^
+        	-H "Token: %QASE_TOKEN%" ^
+        	-F "file=@target/surefire-reports/testng-results.xml"
+    		""", returnStatus: true
+
+    		if (status != 0) {
+        	echo "⚠️ Warning: Failed to update Qase.io. Curl returned status ${status}"
+    		} else {
+        	echo '✅ Successfully published results to Qase.io.'
+    			}
+			}
 				
-            // All logic involving variables MUST be inside a script block.
-            script {
+            
+            // Email logic
 				// Defines the files we will use in this script
 				def reportToAttach = 'reports/smoke-report.html'
                 def summaryFile = 'reports/smoke-failure-summary.txt'
