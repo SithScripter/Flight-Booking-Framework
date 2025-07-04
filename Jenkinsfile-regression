@@ -37,7 +37,7 @@ pipeline {
             steps {
                 echo "Running FULL regression suite..."
                 // This command now activates the 'regression' profile
-                bat 'mvn clean test -P regression -Denv=QA -Dsuite.name=regression'
+                bat 'mvn clean test -P regression -Denv=QA'
             }
         }
     }

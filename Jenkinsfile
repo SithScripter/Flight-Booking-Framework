@@ -80,7 +80,7 @@ pipeline
 
 				// 'bat' executes a Windows batch command. For Linux/macOS agents, you would use 'sh'.
 				// We dynamically insert the user's selected parameter value into the Maven command.
-				bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dreport.dir=smoke"
+				bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT}"
 			}
 		}
 	} // The 'stages' block ends here.
