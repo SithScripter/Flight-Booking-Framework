@@ -59,7 +59,7 @@ public class BaseTest {
     logger.info("Logs directory ensured.");
 
     // Read the 'test.suite' property passed from the pom.xml, with a fallback name.
-    String suiteName = System.getProperty("test.suite", "default");
+    String suiteName = System.getProperty("suite.name", "default");
 
     // Initialize the main ExtentReports object.
     extentReports = new ExtentReports();
@@ -160,7 +160,7 @@ public class BaseTest {
           logger.info("✅ ExtentReports flushed to file.");
       }
 
-      String suiteName = System.getProperty("test.suite", "default");
+      String suiteName = System.getProperty("suite.name", "default"); 
       String reportFileName = suiteName + "-report.html";
       String summaryFileName = suiteName + "-failure-summary.txt";
 

@@ -80,7 +80,7 @@ pipeline
 
 				// 'bat' executes a Windows batch command. For Linux/macOS agents, you would use 'sh'.
 				// We dynamically insert the user's selected parameter value into the Maven command.
-				bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT}"
+				bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dreport.dir=smoke"
 			}
 		}
 	} // The 'stages' block ends here.
@@ -98,7 +98,7 @@ pipeline
 			// This publishes the index.html file for a perfect view in the Jenkins UI
 			publishHTML(
 					reportName: 'Smoke Test Report',
-					reportDir: 'reports',
+					reportDir: 'reports/smoke',
 					reportFiles: 'index.html',// Correctly pointing to index.html
 					keepAll: true,
 					alwaysLinkToLastBuild: true,
@@ -164,8 +164,10 @@ pipeline
 				}
 
 				// ✅ Email Logic (No attachment, clickable link only)
-				def summaryFile = 'reports/smoke-failure-summary.txt'
-				def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
+				def reportToAttach = 'reports/smoke/smoke-report.html'
+				def summaryFile = 'reports/smoke/smoke-failure-summary.txt'
+//				def summaryFile = 'reports/smoke-failure-summary.txt'
+//				def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
 				def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
 
 				def emailSubject

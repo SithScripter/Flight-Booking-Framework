@@ -37,7 +37,7 @@ pipeline {
             steps {
                 echo "Running FULL regression suite..."
                 // This command now activates the 'regression' profile
-                bat 'mvn clean test -P regression -Denv=QA'
+                bat 'mvn clean test -P regression -Denv=QA -Dsuite.name=regression'
             }
         }
     }
@@ -105,9 +105,14 @@ pipeline {
                 }
 
                 // --- Email Logic ---
-                def reportFile = 'reports/regression-report.html'
-                def summaryFile = 'reports/regression-failure-summary.txt'
-                def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
+				
+				def reportToAttach = 'reports/regression-report.html'
+				def summaryFile = 'reports/regression-failure-summary.txt'
+				def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
+				
+//                def reportFile = 'reports/regression-report.html'
+//                def summaryFile = 'reports/regression-failure-summary.txt'
+//                def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
                 def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
 
                 def emailSubject
