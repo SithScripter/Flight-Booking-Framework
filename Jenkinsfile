@@ -117,45 +117,45 @@ pipeline
 						string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')
 					])
 					{
-						// Step 1: Create a new Qase Test Run
+						// Step 1: Create the Test Run
 						echo '1. Creating a new Test Run...'
 						bat """
-				curl -s -X POST "https://api.qase.io/v1/run/FB" ^
-				-H "accept: application/json" ^
-				-H "Content-Type: application/json" ^
-				-H "Token: %QASE_TOKEN%" ^
-				-d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
-				-o response.json
-			"""
-
+                curl -s -X POST "https://api.qase.io/v1/run/FB" ^
+                -H "accept: application/json" ^
+                -H "Content-Type: application/json" ^
+                -H "Token: %QASE_TOKEN%" ^
+                -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
+                -o response.json
+            """
 						def responseJson = readJSON file: 'response.json'
 
-						if (responseJson.status == true)
+						if (responseJson.status)
 						{
 							runId = responseJson.result.id
 							echo "✅ Successfully created Qase Test Run with ID: ${runId}"
 
-							// Step 2: Upload TestNG results
-							echo "2. Uploading TestNG results to Qase..."
+							// Step 2: Upload TestNG results to the correct endpoint using PATCH
+							echo "2. Uploading TestNG results to Run ID: ${runId}..."
 							bat """
-					curl -s -X POST "https://api.qase.io/v1/result/FB/${runId}/testng" ^
-					-H "accept: application/json" ^
-					-H "Content-Type: multipart/form-data" ^
-					-H "Token: %QASE_TOKEN%" ^
-					-F "file=@target/surefire-reports/testng-results.xml"
-				"""
+                    curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
+                    -H "accept: application/json" ^
+                    -H "Content-Type: multipart/form-data" ^
+                    -H "Token: %QASE_TOKEN%" ^
+                    -F "file=@target/surefire-reports/testng-results.xml"
+                """
+							echo "✅ Test results uploaded to Qase.io."
 
-							// ✅ Step 3: Mark the Qase Run as complete
+							// Step 3: Mark the Test Run as complete
 							echo "3. Marking Qase Test Run as complete..."
 							bat """
-					curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
-					-H "accept: application/json" ^
-					-H "Token: %QASE_TOKEN%"
-				"""
+                    curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
+                    -H "accept: application/json" ^
+                    -H "Token: %QASE_TOKEN%"
+                """
 							echo "✅ Qase Test Run ${runId} marked as complete."
 						} else
 						{
-							echo "⚠️ Warning: Qase API returned an error. Response: ${responseJson}"
+							echo "⚠️ Warning: Qase API returned an error during run creation. Response: ${responseJson}"
 						}
 					}
 				} catch (Exception err)
@@ -163,7 +163,7 @@ pipeline
 					echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
 				}
 
-				// ✅ Email Logic (no attachment, just clickable link)
+				// ✅ Email Logic (No attachment, clickable link only)
 				def summaryFile = 'reports/smoke-failure-summary.txt'
 				def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
 				def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
@@ -179,11 +179,11 @@ pipeline
 				{
 					emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
 					emailBody = """
-			<p><b>WARNING: The build has failed.</b></p>
-			<p><b>Failure Summary:</b></p>
-			<pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
-			<p><b><a href='${reportURL}'>📄 View Full Report in Jenkins</a></b></p>
-		"""
+            <p><b>WARNING: The build has failed.</b></p>
+            <p><b>Failure Summary:</b></p>
+            <pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
+            <p><b><a href='${reportURL}'>📄 View Full Report in Jenkins</a></b></p>
+        """
 				}
 
 				withCredentials([
