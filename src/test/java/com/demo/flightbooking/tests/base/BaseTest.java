@@ -47,6 +47,8 @@ public class BaseTest {
     
     // Read the 'test.suite' property passed from the Jenkinsfile/Maven command.
     String suiteName = System.getProperty("test.suite", "default");
+    logger.info("test.suite system property received: '{}'", suiteName);
+
 
     // This reporter creates a single self-contained offline file with a dynamic name.
     ExtentSparkReporter sparkReporter =

@@ -6,7 +6,14 @@ pipeline {
     }
     stages {
         stage('Log Build Info') { /* ... */ }
-        stage('Clean Workspace') { steps { cleanWs() } }
+		stage('Clean Reports Folder') {
+			steps {
+			  deleteDir() // Deletes entire workspace, safer if you use cleanWs instead
+			  bat "if exist reports rmdir /s /q reports"
+			}
+		  }
+		  
+//        stage('Clean Workspace') { steps { cleanWs() } }
         stage('Checkout SCM') { steps { checkout scm } }
         stage('Build & Run Regression Tests') {
             steps {
@@ -22,17 +29,72 @@ pipeline {
             
             script {
                 // --- Qase.io Integration ---
-                try {
-                    // ... your existing Qase logic ...
-                } catch (Exception err) {
-                    echo "⚠️ Warning: Qase.io integration failed: ${err.getMessage()}"
-                }
+				try
+				{
+					echo '--- Starting Qase.io Integration ---'
+					def runId
+
+					withCredentials([
+						string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')
+					])
+					{
+						// Step 1: Create the Test Run
+						echo '1. Creating a new Test Run...'
+						bat """
+                curl -s -X POST "https://api.qase.io/v1/run/FB" ^
+                -H "accept: application/json" ^
+                -H "Content-Type: application/json" ^
+                -H "Token: %QASE_TOKEN%" ^
+                -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
+                -o response.json
+            """
+						def responseJson = readJSON file: 'response.json'
+
+						if (responseJson.status)
+						{
+							runId = responseJson.result.id
+							echo "✅ Successfully created Qase Test Run with ID: ${runId}"
+
+							// Step 2: Upload TestNG results to the correct endpoint using PATCH
+							echo "2. Uploading TestNG results to Run ID: ${runId}..."
+							bat """
+                    curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
+                    -H "accept: application/json" ^
+                    -H "Content-Type: multipart/form-data" ^
+                    -H "Token: %QASE_TOKEN%" ^
+                    -F "file=@target/surefire-reports/testng-results.xml"
+                """
+							echo "✅ Test results uploaded to Qase.io."
+
+							// Step 3: Mark the Test Run as complete
+							echo "3. Marking Qase Test Run as complete..."
+							bat """
+                    curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
+                    -H "accept: application/json" ^
+                    -H "Token: %QASE_TOKEN%"
+                """
+							echo "✅ Qase Test Run ${runId} marked as complete."
+						} else
+						{
+							echo "⚠️ Warning: Qase API returned an error during run creation. Response: ${responseJson}"
+						}
+					}
+				} catch (Exception err)
+				{
+					echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
+				}
 
                 // --- Email Notification Logic ---
-                def reportToAttach = 'reports/regression-report.html'
-                def summaryFile = 'reports/regression-failure-summary.txt'
+				def suiteName = "regression"
+//                def reportToAttach = 'reports/regression-report.html'
+				def reportToAttach = "reports/${suiteName}-report.html"
+				
+//                def summaryFile = 'reports/regression-failure-summary.txt'
+				def summaryFile = "reports/${suiteName}-failure-summary.txt"
+				
                 def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : ""
-                def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
+//                def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
+				def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
 
                 def emailSubject
                 def emailBody
