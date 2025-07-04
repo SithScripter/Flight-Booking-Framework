@@ -5,7 +5,32 @@ pipeline {
         jdk 'JDK 21'
     }
     stages {
-        stage('Log Build Info') { /* ... */ }
+		// Stage 1: for providing LOg Build Info-good for debugging
+		stage('Log Build Info')
+		{
+			steps
+			{
+				// This 'echo' step prints a clear header to the console log for easy reading.
+				echo "================================================="
+				echo "          BUILD & TEST METADATA"
+				echo "================================================="
+				// Jenkins provides environment variables that give us context about the build.
+				echo "Job: ${env.JOB_NAME}"
+				echo "Build Number: ${env.BUILD_NUMBER}"
+				echo "Workspace: ${env.WORKSPACE}"
+				// The 'currentBuild' global variable gives us more detailed information about the trigger.
+				echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
+				// For Git-based projects, Jenkins provides specific SCM variables.
+				echo "Branch: ${env.BRANCH_NAME}"
+				echo "Commit: ${env.GIT_COMMIT}"
+				echo "================================================="
+			}
+		}
+		stage('Confirm Jenkinsfile Source') {
+			steps {
+				bat "type Jenkinsfile-regression"
+			}
+		}
         stage('Clean Workspace') { steps { cleanWs() } }
 		stage('Checkout SCM') {
 			steps {
