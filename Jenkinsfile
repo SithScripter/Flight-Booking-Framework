@@ -127,7 +127,7 @@ pipeline
                 			-H "accept: application/json" ^
                 			-H "Content-Type: application/json" ^
                 			-H "Token: %QASE_TOKEN%" ^
-                			-d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[1]}" ^
+                			-d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
                 			-o response.json
             				"""
 
