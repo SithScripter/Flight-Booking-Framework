@@ -104,7 +104,7 @@ post {
                         echo '1. Creating a new Test Run...'
                         def createRunResponse = bat(
                             script: """
-                                curl -s -X POST "https://api.qase.io/v1/run/YOUR_PROJECT_CODE" ^
+                                curl -s -X POST "https://api.qase.io/v1/run/FB" ^
                                 -H "accept: application/json" ^
                                 -H "Content-Type: application/json" ^
                                 -H "Token: %QASE_TOKEN%" ^
