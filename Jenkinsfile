@@ -112,8 +112,6 @@ post {
                 echo "Warning: Failed to update Qase.io. Error: ${err.getMessage()}"
             }
 				
-				
-            
             // All logic involving variables MUST be inside a script block.
             script {
 				// Defines the files we will use in this script
