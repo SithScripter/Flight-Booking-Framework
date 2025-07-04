@@ -6,19 +6,17 @@ pipeline {
     }
     stages {
         stage('Log Build Info') { /* ... */ }
-		stage('Clean Reports Folder') {
+        stage('Clean Workspace') { steps { cleanWs() } }
+		stage('Checkout SCM') {
 			steps {
-			  deleteDir() // Deletes entire workspace, safer if you use cleanWs instead
-			  bat "if exist reports rmdir /s /q reports"
+			  checkout scm
+			  bat "type Jenkinsfile"  // ← Print the Jenkinsfile being executed
 			}
 		  }
-		  
-//        stage('Clean Workspace') { steps { cleanWs() } }
-        stage('Checkout SCM') { steps { checkout scm } }
         stage('Build & Run Regression Tests') {
             steps {
                 echo 'Running regression tests on QA...'
-                bat "mvn clean test -P regression -Denv=QA -Dtest.suite=regression"
+                bat "mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression"
             }
         }
     }
