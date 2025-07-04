@@ -111,7 +111,6 @@ post {
     			}
 			}
 				
-            
             // Email logic
 				// Defines the files we will use in this script
 				def reportToAttach = 'reports/smoke-report.html'
