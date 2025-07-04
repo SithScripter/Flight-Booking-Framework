@@ -1,5 +1,3 @@
-// Jenkinsfile-regression (For the Nightly Full Regression Suite)
-
 pipeline {
     agent any
 
@@ -9,11 +7,10 @@ pipeline {
     }
 
     stages {
-        // --- ADDED THIS NEW STAGE FOR TRACEABILITY ---
         stage('Log Build Info') {
             steps {
                 echo "================================================="
-                echo "      BUILD & TEST METADATA"
+                echo "      BUILD & TEST METADATA (REGRESSION)"
                 echo "================================================="
                 echo "Job: ${env.JOB_NAME}"
                 echo "Build Number: ${env.BUILD_NUMBER}"
@@ -38,28 +35,106 @@ pipeline {
 
         stage('Build & Run Regression Tests') {
             steps {
-                echo 'Running FULL regression suite...'
+                echo "Running FULL regression suite..."
+                // This command now activates the 'regression' profile
                 bat 'mvn clean test -P regression -Denv=QA'
             }
         }
     }
 
-    // The post block remains the same
+    // This post block is now complete and tailored for the regression run.
     post {
         always {
             echo 'Archiving reports and emailing results for REGRESSION suite...'
             
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-            publishHTML(reportName: 'Regression Test Report', reportDir: 'reports', reportFiles: 'index.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
+            publishHTML(
+                reportName: 'Regression Test Report', // Updated for regression
+                reportDir: 'reports',
+                reportFiles: 'index.html',
+                keepAll: true,
+                alwaysLinkToLastBuild: true,
+                allowMissing: true
+            )
             
             script {
-                def reportToAttach = 'reports/regression-report.html'
+                try {
+                    def runId
+                    withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
+                        
+                        echo '1. Creating a new Test Run in Qase...'
+                        // For the regression run, we will omit the 'cases' field to include ALL test cases in the project.
+                        bat """
+                            curl -s -X POST "https://api.qase.io/v1/run/FB" ^
+                            -H "accept: application/json" ^
+                            -H "Content-Type: application/json" ^
+                            -H "Token: %QASE_TOKEN%" ^
+                            -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\"}" ^
+                            -o response.json
+                        """
+                        def responseJson = readJSON file: 'response.json'
+
+                        if (responseJson.status) {
+                            runId = responseJson.result.id
+                            echo "✅ Successfully created Qase Test Run with ID: ${runId}"
+                            
+                            // Upload results to the new Run ID
+                            echo "2. Uploading results to Run ID: ${runId}..."
+                            bat """
+                                curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
+                                -H "accept: application/json" ^
+                                -H "Content-Type: multipart/form-data" ^
+                                -H "Token: %QASE_TOKEN%" ^
+                                -F "file=@target/surefire-reports/testng-results.xml"
+                            """
+
+                            // Mark the Qase Run as complete
+                            echo "3. Marking Qase Test Run as complete..."
+                            bat """
+                                curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
+                                -H "accept: application/json" ^
+                                -H "Token: %QASE_TOKEN%"
+                            """
+                            echo "✅ Qase Test Run ${runId} marked as complete."
+                        } else {
+                           echo "⚠️ Warning: Qase API returned an error during run creation. Response: ${responseJson}"
+                        }
+                    }
+                } catch (Exception err) {
+                    echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
+                }
+
+                // --- Email Logic ---
+                def reportFile = 'reports/regression-report.html'
                 def summaryFile = 'reports/regression-failure-summary.txt'
-                
                 def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
                 def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
 
-                // ... (rest of your existing, correct email logic)
+                def emailSubject
+                def emailBody
+
+                if (currentBuild.currentResult == 'SUCCESS') {
+                    emailSubject = "✅ SUCCESS: Nightly Regression Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailBody = """<p>Nightly regression build was successful.</p><p><b><a href='${reportURL}'>📄 View Full Regression Report</a></b></p>"""
+                } else {
+                    emailSubject = "❌ FAILURE: Nightly Regression Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailBody = """
+                        <p><b>WARNING: The nightly regression build has failed.</b></p>
+                        <p><b>Failure Summary:</b></p>
+                        <pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
+                        <p><b><a href='${reportURL}'>📄 View Full Regression Report</a></b></p>
+                    """
+                }
+
+                withCredentials([string(credentialsId: 'recipient-email-list', variable: 'RECIPIENT_EMAILS')]) {
+                    emailext(
+                        subject: emailSubject,
+                        body: emailBody,
+                        to: RECIPIENT_EMAILS,
+                        mimeType: 'text/html',
+                        attachmentsPattern: reportFile
+                    )
+                }
             }
         }
     }

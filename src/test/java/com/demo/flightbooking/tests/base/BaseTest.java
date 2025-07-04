@@ -12,10 +12,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,68 +25,84 @@ import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
 
+/**
+ * The base class for all test classes in the framework.
+ * It handles the core setup and teardown logic for test execution, reporting, and logging.
+ */
 public class BaseTest {
 
   protected static final Logger logger = LogManager.getLogger(BaseTest.class);
-  // The single ExtentReports instance for the entire test suite
   private static ExtentReports extentReports;
-  
-  // --- 1. DECLARATION: A thread-safe list to collect failure messages ---
+
+  /**
+   * A thread-safe list to collect failure messages from parallel tests.
+   * 'static' ensures there's only one list per test run.
+   * 'synchronizedList' prevents race conditions when tests run in parallel.
+   */
   protected static final List<String> failureSummaries =
       Collections.synchronizedList(new ArrayList<>());
 
   /**
-   * This method runs once before the entire test suite starts. It initializes the ExtentReports
-   * object and sets up system information.
+   * This method runs once before the entire test suite starts.
+   * It is responsible for setting up the ExtentReports instance.
    */
   @BeforeSuite(alwaysRun = true)
   public void setUpSuite() {
-      File logsDir = new File("logs");
-      if (!logsDir.exists()) {
-          logsDir.mkdirs();
-      }
-      logger.info("Logs directory ensured.");
-      
-      // Read the 'test.suite' property passed from the POM, with a fallback name of 'default'.
-      String suiteName = System.getProperty("test.suite", "default");
+    File logsDir = new File("logs");
+    if (!logsDir.exists()) {
+      logsDir.mkdirs();
+    }
+    logger.info("Logs directory ensured.");
 
-      extentReports = new ExtentReports();
+    // Read the 'test.suite' property passed from the pom.xml, with a fallback name.
+    String suiteName = System.getProperty("test.suite", "default");
 
-      // This reporter creates a single self-contained file with a dynamic name for email attachments.
-      ExtentSparkReporter sparkReporter = new ExtentSparkReporter("reports/" + suiteName + "-report.html");
-      sparkReporter.config().setOfflineMode(true);
-      sparkReporter.config().setDocumentTitle("Test Report: " + suiteName.toUpperCase());
-      sparkReporter.config().setReportName("Test Execution Report");
-      
-      extentReports.attachReporter(sparkReporter);
-      logger.info("Generating report at: reports/" + suiteName + "-report.html");
+    // Initialize the main ExtentReports object.
+    extentReports = new ExtentReports();
 
+    // Configure the reporter to create a single, self-contained offline HTML file.
+    // The filename is dynamic based on the Maven profile being run (e.g., "smoke-report.html").
+    ExtentSparkReporter sparkReporter =
+        new ExtentSparkReporter("reports/" + suiteName + "-report.html");
+    sparkReporter.config().setOfflineMode(true);
+    sparkReporter.config().setDocumentTitle("Test Report: " + suiteName.toUpperCase());
+    sparkReporter.config().setReportName("Test Execution Report");
 
-      // Set system information...
-      extentReports.setSystemInfo("Tester", ConfigReader.getProperty("tester.name"));
-      extentReports.setSystemInfo("OS", System.getProperty("os.name"));
-      extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
-      extentReports.setSystemInfo("Browser", ConfigReader.getProperty("browser"));
+    // Attach the configured reporter to our main reports object.
+    extentReports.attachReporter(sparkReporter);
+    logger.info("Generating report at: reports/{}-report.html", suiteName);
+
+    // Set system information that will be displayed in the report dashboard.
+    extentReports.setSystemInfo("Tester", ConfigReader.getProperty("tester.name"));
+    extentReports.setSystemInfo("OS", System.getProperty("os.name"));
+    extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
+    extentReports.setSystemInfo("Browser", ConfigReader.getProperty("browser"));
   }
 
-
   /**
-   * This method runs before each @Test method. It initializes the WebDriver and creates a new test
-   * entry in the report.
+   * This method runs before each @Test method.
+   * It initializes the WebDriver for the current thread and creates a new test entry in the report.
+   *
+   * @param method The test method that is about to be run.
    */
   @BeforeMethod(alwaysRun = true)
   public void setUp(Method method) {
+    // Get a unique WebDriver instance for the current thread.
     DriverManager.getDriver();
     logger.info("WebDriver initialized for test: {}", method.getName());
 
+    // Create a new test node in the Extent Report.
     ExtentTest test = extentReports.createTest(method.getName());
+    // Store this test object in a ThreadLocal variable so it's accessible throughout the test.
     ExtentManager.setTest(test);
     logger.info("ExtentTest created for test: {}", method.getName());
   }
 
   /**
-   * This method runs after each @Test method. It logs the test status, captures a screenshot on
-   * failure, and quits the driver.
+   * This method runs after each @Test method completes.
+   * It logs the test status, captures a screenshot on failure, and quits the driver.
+   *
+   * @param result The result of the test method that has just run.
    */
   @AfterMethod(alwaysRun = true)
   public void tearDown(ITestResult result) {
@@ -98,16 +110,17 @@ public class BaseTest {
     WebDriver driver = DriverManager.getDriver();
 
     if (test != null) {
+      // Logic for handling a failed test.
       if (result.getStatus() == ITestResult.FAILURE) {
-    	  
-    	  // --- 2. POPULATION: If a test fails, we add its details to our list ---
-          String failureMsg =
-              "❌ "
-                  + result.getMethod().getMethodName()
-                  + " FAILED: "
-                  + result.getThrowable().getMessage().split("\n")[0]; // Get first line of error
-          failureSummaries.add(failureMsg);
-    	  
+        // Create a concise failure message and add it to our list for the email summary.
+        String failureMsg =
+            "❌ "
+                + result.getMethod().getMethodName()
+                + " FAILED: "
+                + result.getThrowable().getMessage().split("\n")[0]; // Get first line of error message
+        failureSummaries.add(failureMsg);
+
+        // Capture a screenshot and attach it to the Extent Report.
         String screenshotPath =
             ScreenshotUtils.captureScreenshot(driver, result.getMethod().getMethodName());
         String relativePathForReport = "./screenshots/" + new File(screenshotPath).getName();
@@ -116,64 +129,47 @@ public class BaseTest {
         logger.error(
             "Test failed: {} | Screenshot: {}", result.getMethod().getMethodName(), screenshotPath);
       } else if (result.getStatus() == ITestResult.SKIP) {
-        // The TestListener will handle logging for retried tests
+        // Log skipped tests.
+        test.log(Status.SKIP, "Test skipped");
       } else {
+        // Log passed tests.
         test.log(Status.PASS, "Test passed");
       }
     }
 
+    // Quit the WebDriver instance for the current thread.
     DriverManager.quitDriver();
     logger.info("WebDriver quit after test method: {}", result.getMethod().getMethodName());
+    // Clean up the ExtentTest object for the current thread to prevent memory leaks.
     ExtentManager.unload();
   }
 
   /**
-   * This method runs once after the entire test suite has finished. It writes all the test
-   * information from memory to the HTML report file.
+   * This method runs once after the entire test suite has finished.
+   * It writes the Extent Report to the HTML file and creates the failure summary file.
    */
   @AfterSuite(alwaysRun = true)
   public void tearDownSuite() {
-      if (extentReports != null) {
-          extentReports.flush();
-          logger.info("✅ ExtentReports flushed to file.");
-      }
+    // Write all data to the HTML report file.
+    if (extentReports != null) {
+      extentReports.flush();
+      logger.info("✅ ExtentReports flushed to file.");
+    }
 
-      String suiteName = System.getProperty("test.suite", "default");
-      String reportFileName = suiteName + "-report.html";  // ✅ Actual generated file
-      String summaryFileName = suiteName + "-failure-summary.txt";
+    // Get the dynamic suite name again.
+    String suiteName = System.getProperty("test.suite", "default");
 
-      // 1️ Write failure summary if needed
-      if (!failureSummaries.isEmpty()) {
-          try (PrintWriter out = new PrintWriter("reports/" + summaryFileName)) {
-              out.println("===== FAILED TEST SUMMARY =====");
-              for (String fail : failureSummaries) {
-                  out.println(fail);
-              }
-              logger.info("✅ Failure summary written: " + summaryFileName);
-          } catch (IOException e) {
-              logger.error("❌ Failed to write failure summary", e);
-          }
-      }
-
-      // 2️ Copy the report to index.html for Jenkins sidebar
-      try {
-          Path source = Paths.get("reports", reportFileName);  // ✅ smoke-report.html
-          Path target = Paths.get("reports", "index.html");
-
-          logger.info("Attempting to copy report to index.html");
-          logger.info("Source: " + source.toAbsolutePath());
-          logger.info("Target: " + target.toAbsolutePath());
-
-          if (!Files.exists(source)) {
-              logger.error("❌ Source report file not found: " + source.toString());
-              return;
-          }
-
-          Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
-          logger.info("✅ Report copied to index.html for Jenkins compatibility.");
-
+    // If any tests failed, write the failure summary list to a text file.
+    if (!failureSummaries.isEmpty()) {
+      try (PrintWriter out = new PrintWriter("reports/" + suiteName + "-failure-summary.txt")) {
+        out.println("===== FAILED TEST SUMMARY =====");
+        for (String fail : failureSummaries) {
+          out.println(fail);
+        }
+        logger.info("✅ Failure summary written to file.");
       } catch (IOException e) {
-          logger.error("❌ Failed to copy report to index.html", e);
+        logger.error("❌ Failed to write failure summary.", e);
       }
+    }
   }
 }
