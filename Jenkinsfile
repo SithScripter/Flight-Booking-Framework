@@ -111,43 +111,51 @@ pipeline
 				try
 				{
 					echo '--- Starting Qase.io Integration ---'
+					def runId
+
 					withCredentials([
 						string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')
 					])
 					{
-
+						// Step 1: Create a new Qase Test Run
 						echo '1. Creating a new Test Run...'
 						bat """
-                            curl -s -X POST "https://api.qase.io/v1/run/FB" ^
-                            -H "accept: application/json" ^
-                            -H "Content-Type: application/json" ^
-                            -H "Token: %QASE_TOKEN%" ^
-                            -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
-                            -o response.json
-                        """
+				curl -s -X POST "https://api.qase.io/v1/run/FB" ^
+				-H "accept: application/json" ^
+				-H "Content-Type: application/json" ^
+				-H "Token: %QASE_TOKEN%" ^
+				-d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
+				-o response.json
+			"""
 
 						def responseJson = readJSON file: 'response.json'
 
-						// ---- THIS IS THE KEY CHANGE ----
-						// First, check if the API call was successful by checking the 'status' field.
 						if (responseJson.status == true)
 						{
-							def runId = responseJson.result.id
+							runId = responseJson.result.id
 							echo "✅ Successfully created Qase Test Run with ID: ${runId}"
 
-							// Proceed to upload results...
+							// Step 2: Upload TestNG results
+							echo "2. Uploading TestNG results to Qase..."
 							bat """
-                                curl -s -X POST "https://api.qase.io/v1/result/FB/${runId}/testng" ^
-                                -H "accept: application/json" ^
-                                -H "Content-Type: multipart/form-data" ^
-                                -H "Token: %QASE_TOKEN%" ^
-                                -F "file=@target/surefire-reports/testng-results.xml"
-                            """
-							echo '✅ Successfully published results to Qase.io.'
+					curl -s -X POST "https://api.qase.io/v1/result/FB/${runId}/testng" ^
+					-H "accept: application/json" ^
+					-H "Content-Type: multipart/form-data" ^
+					-H "Token: %QASE_TOKEN%" ^
+					-F "file=@target/surefire-reports/testng-results.xml"
+				"""
+
+							// ✅ Step 3: Mark the Qase Run as complete
+							echo "3. Marking Qase Test Run as complete..."
+							bat """
+					curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
+					-H "accept: application/json" ^
+					-H "Token: %QASE_TOKEN%"
+				"""
+							echo "✅ Qase Test Run ${runId} marked as complete."
 						} else
 						{
-							// If the status was not true, print the error message from the API.
-							echo "⚠️ Warning: Qase API returned an error. Response was: ${responseJson}"
+							echo "⚠️ Warning: Qase API returned an error. Response: ${responseJson}"
 						}
 					}
 				} catch (Exception err)
@@ -155,11 +163,8 @@ pipeline
 					echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
 				}
 
-				// Email logic
-				// Defines the files we will use in this script
-				def reportToAttach = 'reports/smoke-report.html'
+				// ✅ Email Logic (no attachment, just clickable link)
 				def summaryFile = 'reports/smoke-failure-summary.txt'
-
 				def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "Check Jenkins console for details."
 				def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
 
@@ -174,11 +179,11 @@ pipeline
 				{
 					emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
 					emailBody = """
-                        <p><b>WARNING: The build has failed.</b></p>
-                        <p><b>Failure Summary:</b></p>
-                        <pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
-                        <p><b><a href='${reportURL}'>📄 View Full Report in Jenkins</a></b></p>
-                    """
+			<p><b>WARNING: The build has failed.</b></p>
+			<p><b>Failure Summary:</b></p>
+			<pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
+			<p><b><a href='${reportURL}'>📄 View Full Report in Jenkins</a></b></p>
+		"""
 				}
 
 				withCredentials([
@@ -189,8 +194,7 @@ pipeline
 							subject: emailSubject,
 							body: emailBody,
 							to: RECIPIENT_EMAILS,
-							mimeType: 'text/html',
-							attachmentsPattern: reportToAttach
+							mimeType: 'text/html'
 							)
 				}
 			}
