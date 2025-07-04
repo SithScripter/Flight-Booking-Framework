@@ -128,7 +128,7 @@ pipeline
 
 						def responseJson = readJSON file: 'response.json'
 
-						// --- THIS IS THE KEY CHANGE ---
+						// ---- THIS IS THE KEY CHANGE ----
 						// First, check if the API call was successful by checking the 'status' field.
 						if (responseJson.status == true)
 						{
