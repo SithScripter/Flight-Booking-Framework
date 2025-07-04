@@ -124,7 +124,7 @@
 		</plugins>
 	</build>
 	
-<profiles>
+	<profiles>
 		<profile>
 			<id>smoke</id>
 			<activation>
@@ -139,9 +139,6 @@
 							<suiteXmlFiles>
 								<suiteXmlFile>src/test/resources/test-suites/testng-smoke.xml</suiteXmlFile>
 							</suiteXmlFiles>
-							<systemPropertyVariables>
-								<test.suite>${project.activeProfiles[0].id}</test.suite>
-							</systemPropertyVariables>
 						</configuration>
 					</plugin>
 				</plugins>
@@ -158,9 +155,6 @@
 							<suiteXmlFiles>
 								<suiteXmlFile>src/test/resources/test-suites/testng-regression.xml</suiteXmlFile>
 							</suiteXmlFiles>
-							<systemPropertyVariables>
-								<test.suite>${project.activeProfiles[0].id}</test.suite>
-							</systemPropertyVariables>
 						</configuration>
 					</plugin>
 				</plugins>

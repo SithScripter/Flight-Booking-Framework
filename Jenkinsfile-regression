@@ -1,105 +1,31 @@
 pipeline {
     agent any
-
     tools {
         maven 'apache-maven-3.9.9'
         jdk 'JDK 21'
     }
-
     stages {
-        stage('Log Build Info') {
-            steps {
-                echo "================================================="
-                echo "      BUILD & TEST METADATA (REGRESSION)"
-                echo "================================================="
-                echo "Job: ${env.JOB_NAME}"
-                echo "Build Number: ${env.BUILD_NUMBER}"
-                echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
-                echo "Branch: ${env.BRANCH_NAME}"
-                echo "Commit: ${env.GIT_COMMIT}"
-                echo "================================================="
-            }
-        }
-
-        stage('Clean Workspace') {
-            steps {
-                cleanWs()
-            }
-        }
-
-        stage('Checkout SCM') {
-            steps {
-                checkout scm
-            }
-        }
-
+        stage('Log Build Info') { /* ... */ }
+        stage('Clean Workspace') { steps { cleanWs() } }
+        stage('Checkout SCM') { steps { checkout scm } }
         stage('Build & Run Regression Tests') {
             steps {
-                echo "Running FULL regression suite..."
-                // This command correctly activates the 'regression' profile and sets the dynamic suite name
-                bat 'mvn clean test -P regression -Denv=QA -Dtest.suite=regression'
+                echo 'Running regression tests on QA...'
+                bat "mvn clean test -P regression -Denv=QA -Dtest.suite=regression"
             }
         }
     }
-
-    // This post block is now complete and tailored for the regression run.
     post {
         always {
-            echo 'Archiving reports and emailing results for REGRESSION suite...'
-            
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-            publishHTML(
-                reportName: 'Regression Test Report',
-                reportDir: 'reports',
-                reportFiles: 'index.html',
-                keepAll: true,
-                alwaysLinkToLastBuild: true,
-                allowMissing: true
-            )
+            publishHTML(reportName: 'Regression Test Report', reportDir: 'reports', reportFiles: 'index.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
             
             script {
                 // --- Qase.io Integration ---
                 try {
-                    def runId
-                    withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
-                        echo '1. Creating a new Test Run in Qase...'
-                        // For the regression run, we omit the 'cases' field to include ALL test cases.
-                        bat """
-                            curl -s -X POST "https://api.qase.io/v1/run/FB" ^
-                            -H "accept: application/json" ^
-                            -H "Content-Type: application/json" ^
-                            -H "Token: %QASE_TOKEN%" ^
-                            -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\"}" ^
-                            -o response.json
-                        """
-                        def responseJson = readJSON file: 'response.json'
-
-                        if (responseJson.status) {
-                            runId = responseJson.result.id
-                            echo "✅ Successfully created Qase Test Run with ID: ${runId}"
-                            
-                            echo "2. Uploading TestNG results..."
-                            bat """
-                                curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
-                                -H "accept: application/json" ^
-                                -H "Content-Type: multipart/form-data" ^
-                                -H "Token: %QASE_TOKEN%" ^
-                                -F "file=@target/surefire-reports/testng-results.xml"
-                            """
-                            
-                            echo "3. Marking Qase Test Run as complete..."
-                            bat """
-                                curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
-                                -H "accept: application/json" ^
-                                -H "Token: %QASE_TOKEN%"
-                            """
-                             echo "✅ Qase Test Run ${runId} marked as complete."
-                        } else {
-                           echo "⚠️ Warning: Qase API returned an error during run creation: ${responseJson}"
-                        }
-                    }
+                    // ... your existing Qase logic ...
                 } catch (Exception err) {
-                    echo "⚠️ Warning: An exception occurred during Qase.io integration: ${err.getMessage()}"
+                    echo "⚠️ Warning: Qase.io integration failed: ${err.getMessage()}"
                 }
 
                 // --- Email Notification Logic ---
