@@ -12,6 +12,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -150,26 +154,43 @@ public class BaseTest {
    */
   @AfterSuite(alwaysRun = true)
   public void tearDownSuite() {
-    // Write all data to the HTML report file.
-    if (extentReports != null) {
-      extentReports.flush();
-      logger.info("✅ ExtentReports flushed to file.");
-    }
-
-    // Get the dynamic suite name again.
-    String suiteName = System.getProperty("test.suite", "default");
-
-    // If any tests failed, write the failure summary list to a text file.
-    if (!failureSummaries.isEmpty()) {
-      try (PrintWriter out = new PrintWriter("reports/" + suiteName + "-failure-summary.txt")) {
-        out.println("===== FAILED TEST SUMMARY =====");
-        for (String fail : failureSummaries) {
-          out.println(fail);
-        }
-        logger.info("✅ Failure summary written to file.");
-      } catch (IOException e) {
-        logger.error("❌ Failed to write failure summary.", e);
+      // First, ensure the report is written to its original file (e.g., smoke-report.html)
+      if (extentReports != null) {
+          extentReports.flush();
+          logger.info("✅ ExtentReports flushed to file.");
       }
-    }
+
+      String suiteName = System.getProperty("test.suite", "default");
+      String reportFileName = suiteName + "-report.html";
+      String summaryFileName = suiteName + "-failure-summary.txt";
+
+      // Write the failure summary file, as before.
+      if (!failureSummaries.isEmpty()) {
+          try (PrintWriter out = new PrintWriter("reports/" + summaryFileName)) {
+              out.println("===== FAILED TEST SUMMARY =====");
+              for (String fail : failureSummaries) {
+                  out.println(fail);
+              }
+              logger.info("✅ Failure summary written: " + summaryFileName);
+          } catch (IOException e) {
+              logger.error("❌ Failed to write failure summary", e);
+          }
+      }
+
+      // --- THIS IS THE FIX ---
+      // Copy the dynamically named report to a generic 'index.html' for the Jenkins publisher.
+      try {
+          Path source = Paths.get("reports", reportFileName);
+          Path target = Paths.get("reports", "index.html");
+
+          if (Files.exists(source)) {
+              Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+              logger.info("✅ Report successfully copied to index.html for Jenkins display.");
+          } else {
+              logger.error("❌ Source report file for copying not found: " + source.toString());
+          }
+      } catch (IOException e) {
+          logger.error("❌ Failed to copy report to index.html", e);
+      }
   }
 }
