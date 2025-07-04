@@ -108,7 +108,6 @@ pipeline
 			// All logic involving variables MUST be inside a script block.
 			script
 			{
-				// We wrap this in a try/catch so a failure to update Qase does not fail the build.
 				try
 				{
 					echo '--- Starting Qase.io Integration ---'
@@ -117,45 +116,43 @@ pipeline
 					])
 					{
 
-						// --- STEP 1: Create a new Test Run in Qase ---
-						// This API call creates a new run container and returns a JSON response with its ID.
-						// IMPORTANT: Replace 'YOUR_PROJECT_CODE' and the case IDs [1, 2] below.
 						echo '1. Creating a new Test Run...'
-						// We add '-o response.json' to tell curl to save the clean JSON output to a file.
 						bat """
-                			curl -s -X POST "https://api.qase.io/v1/run/FB" ^
-                			-H "accept: application/json" ^
-                			-H "Content-Type: application/json" ^
-                			-H "Token: %QASE_TOKEN%" ^
-                			-d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
-                			-o response.json
-            				"""
+                            curl -s -X POST "https://api.qase.io/v1/run/FB" ^
+                            -H "accept: application/json" ^
+                            -H "Content-Type: application/json" ^
+                            -H "Token: %QASE_TOKEN%" ^
+                            -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
+                            -o response.json
+                        """
 
-						// Now, we read the clean JSON from the file instead of the console output.
 						def responseJson = readJSON file: 'response.json'
-						def runId = responseJson.result.id
 
-						if (runId)
+						// --- THIS IS THE KEY CHANGE ---
+						// First, check if the API call was successful by checking the 'status' field.
+						if (responseJson.status == true)
 						{
-							echo "✅ Qase Test Run created. ID: ${runId}"
-							// STEP 2: Upload test results
-							echo '2. Uploading TestNG results...'
+							def runId = responseJson.result.id
+							echo "✅ Successfully created Qase Test Run with ID: ${runId}"
+
+							// Proceed to upload results...
 							bat """
-                    		curl -s -X POST "https://api.qase.io/v1/result/FB/${runId}/testng" ^
-                    		-H "accept: application/json" ^
-                    		-H "Content-Type: multipart/form-data" ^
-                    		-H "Token: %QASE_TOKEN%" ^
-                    		-F "file=@target/surefire-reports/testng-results.xml"
-                			"""
-							echo '✅ Test results uploaded to Qase.io.'
+                                curl -s -X POST "https://api.qase.io/v1/result/FB/${runId}/testng" ^
+                                -H "accept: application/json" ^
+                                -H "Content-Type: multipart/form-data" ^
+                                -H "Token: %QASE_TOKEN%" ^
+                                -F "file=@target/surefire-reports/testng-results.xml"
+                            """
+							echo '✅ Successfully published results to Qase.io.'
 						} else
 						{
-							echo "⚠️ Could not extract runId. Raw response: ${responseJson}"
+							// If the status was not true, print the error message from the API.
+							echo "⚠️ Warning: Qase API returned an error. Response was: ${responseJson}"
 						}
 					}
-				} catch (err)
+				} catch (Exception err)
 				{
-					echo "⚠️ Qase.io integration failed: ${err.getMessage()}"
+					echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
 				}
 
 				// Email logic
