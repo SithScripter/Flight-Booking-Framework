@@ -29,8 +29,12 @@ public class BookingTest extends BaseTest {
      *
      * @param passenger Passenger record containing personal, payment, and flight details from JSON.
      */
-    @Test(dataProvider = "passengerData", dataProviderClass = JsonDataProvider.class,
-          groups = {"regression", "smoke", "passenger_booking"})
+    @Test(
+            dataProvider = "passengerData", 
+            dataProviderClass = JsonDataProvider.class,
+            groups = {"regression", "smoke", "passenger_booking"},
+            testName = "Verify successful end-to-end booking using data from JSON"
+        )
     public void testEndToEndBookingFromJson(Passenger passenger) {
         WebDriver driver = DriverManager.getDriver();
         WebDriverUtils webDriverUtils = new WebDriverUtils(driver, ConfigReader.getPropertyAsInt("test.timeout"));
