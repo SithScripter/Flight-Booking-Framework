@@ -1,12 +1,15 @@
 pipeline {
     agent any
+
     parameters {
         choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select environment')
     }
+
     tools {
         maven 'apache-maven-3.9.9'
         jdk 'JDK 21'
     }
+
     stages {
         stage('Log Build Info') {
             steps {
@@ -21,80 +24,94 @@ pipeline {
                 echo "================================================="
             }
         }
+
         stage('Clean Workspace') { steps { cleanWs() } }
+
         stage('Checkout SCM') { steps { checkout scm } }
+
+        stage('Start Selenium Grid (Docker)') {
+            steps {
+                echo '📦 Starting Docker-based Selenium Grid...'
+                bat 'docker-compose -f docker-compose.yml up -d'
+                bat 'timeout /t 20 > NUL' // wait for nodes to register
+            }
+        }
+
         stage('Build & Run Smoke Tests') {
             steps {
-                echo "Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
+                echo "🧪 Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
                 bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke"
             }
         }
+
+        stage('Stop Selenium Grid') {
+            steps {
+                echo '🛑 Stopping Docker-based Selenium Grid...'
+                bat 'docker-compose -f docker-compose.yml down'
+            }
+        }
     }
+
     post {
         always {
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-            publishHTML(reportName: 'Smoke Test Report', reportDir: 'reports', reportFiles: 'index.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
-            
+
+            publishHTML(reportName: 'Smoke Test Report',
+                        reportDir: 'reports',
+                        reportFiles: 'index.html',
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        allowMissing: true)
+
             script {
-                // --- Qase.io Integration ---
-				try
-				{
-					echo '--- Starting Qase.io Integration ---'
-					def runId
+                // 🔗 Qase.io Integration
+                try {
+                    echo '--- Starting Qase.io Integration ---'
+                    def runId
 
-					withCredentials([
-						string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')
-					])
-					{
-						// Step 1: Create the Test Run
-						echo '1. Creating a new Test Run...'
-						bat """
-                curl -s -X POST "https://api.qase.io/v1/run/FB" ^
-                -H "accept: application/json" ^
-                -H "Content-Type: application/json" ^
-                -H "Token: %QASE_TOKEN%" ^
-                -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
-                -o response.json
-            """
-						def responseJson = readJSON file: 'response.json'
+                    withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
+                        echo '1. Creating new run on Qase...'
+                        bat """
+                            curl -s -X POST "https://api.qase.io/v1/run/FB" ^
+                            -H "accept: application/json" ^
+                            -H "Content-Type: application/json" ^
+                            -H "Token: %QASE_TOKEN%" ^
+                            -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
+                            -o response.json
+                        """
+                        def responseJson = readJSON file: 'response.json'
 
-						if (responseJson.status)
-						{
-							runId = responseJson.result.id
-							echo "✅ Successfully created Qase Test Run with ID: ${runId}"
+                        if (responseJson.status) {
+                            runId = responseJson.result.id
+                            echo "✅ Qase Run ID created: ${runId}"
 
-							// Step 2: Upload TestNG results to the correct endpoint using PATCH
-							echo "2. Uploading TestNG results to Run ID: ${runId}..."
-							bat """
-                    curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
-                    -H "accept: application/json" ^
-                    -H "Content-Type: multipart/form-data" ^
-                    -H "Token: %QASE_TOKEN%" ^
-                    -F "file=@target/surefire-reports/testng-results.xml"
-                """
-							echo "✅ Test results uploaded to Qase.io."
+                            echo '2. Uploading test results to Qase...'
+                            bat """
+                                curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
+                                -H "accept: application/json" ^
+                                -H "Content-Type: multipart/form-data" ^
+                                -H "Token: %QASE_TOKEN%" ^
+                                -F "file=@target/surefire-reports/testng-results.xml"
+                            """
 
-							// Step 3: Mark the Test Run as complete
-							echo "3. Marking Qase Test Run as complete..."
-							bat """
-                    curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
-                    -H "accept: application/json" ^
-                    -H "Token: %QASE_TOKEN%"
-                """
-							echo "✅ Qase Test Run ${runId} marked as complete."
-						} else
-						{
-							echo "⚠️ Warning: Qase API returned an error during run creation. Response: ${responseJson}"
-						}
-					}
-				} catch (Exception err)
-				{
-					echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
-				}
+                            echo '3. Marking Qase Run as Complete...'
+                            bat """
+                                curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
+                                -H "accept: application/json" ^
+                                -H "Token: %QASE_TOKEN%"
+                            """
+                        } else {
+                            echo "⚠️ Qase API error: ${responseJson}"
+                        }
+                    }
+                } catch (Exception err) {
+                    echo "⚠️ Qase integration failed: ${err.getMessage()}"
+                }
 
-                // --- Email Notification Logic ---
-                def reportToAttach = 'reports/smoke-report.html'
-                def summaryFile = 'reports/smoke-failure-summary.txt'
+                // 📧 Email Notification
+                def suiteName = "smoke"
+                def reportToAttach = "reports/${suiteName}-report.html"
+                def summaryFile = "reports/${suiteName}-failure-summary.txt"
                 def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : ""
                 def reportURL = "${env.BUILD_URL}Smoke-Test-Report/"
 
@@ -102,15 +119,18 @@ pipeline {
                 def emailBody
 
                 if (currentBuild.currentResult == 'SUCCESS') {
-                    emailSubject = "✅ SUCCESS: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                    emailBody = """<p>Build was successful.</p><p><b><a href='${reportURL}'>📄 View Test Report in Jenkins</a></b></p>"""
-                } else {
-                    emailSubject = "❌ FAILURE: Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailSubject = "✅ SUCCESS: Smoke Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
                     emailBody = """
-                        <p><b>WARNING: The build has failed.</b></p>
+                        <p>Smoke build was successful.</p>
+                        <p><b><a href='${reportURL}'>📄 View Smoke Report</a></b></p>
+                    """
+                } else {
+                    emailSubject = "❌ FAILURE: Smoke Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
+                    emailBody = """
+                        <p><b>Smoke build failed.</b></p>
                         <p><b>Failure Summary:</b></p>
                         <pre style="background-color:#F5F5F5; border:1px solid #E0E0E0; padding:10px; font-family:monospace;">${failureSummary}</pre>
-                        <p><b><a href='${reportURL}'>📄 View Full Report in Jenkins</a></b></p>
+                        <p><b><a href='${reportURL}'>📄 View Full Smoke Report</a></b></p>
                     """
                 }
 
@@ -120,7 +140,26 @@ pipeline {
                         body: emailBody,
                         to: RECIPIENT_EMAILS,
                         mimeType: 'text/html',
+                        attachmentsPattern: reportToAttach
                     )
+                }
+            }
+        }
+
+        failure {
+            // 🧹 Stop Grid if failure before shutdown stage
+            echo '⚠️ Build failed. Attempting to clean up Docker Grid...'
+            script {
+                try {
+                    def result = bat(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
+                    if (result) {
+                        echo "🛑 Stopping containers:\n${result}"
+                        bat 'docker-compose -f docker-compose.yml down || echo "Grid already stopped"'
+                    } else {
+                        echo "✅ No active Selenium containers to stop."
+                    }
+                } catch (e) {
+                    echo "⚠️ Docker cleanup error: ${e.getMessage()}"
                 }
             }
         }

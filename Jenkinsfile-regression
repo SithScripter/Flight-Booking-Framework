@@ -7,7 +7,6 @@ pipeline {
     }
 
     stages {
-
         stage('Log Build Info') {
             steps {
                 echo "================================================="
@@ -38,7 +37,7 @@ pipeline {
         stage('Checkout SCM') {
             steps {
                 checkout scm
-                bat "type Jenkinsfile"  // Confirm which Jenkinsfile is being used
+                bat "type Jenkinsfile"  // Confirm active Jenkinsfile
             }
         }
 
@@ -59,18 +58,16 @@ pipeline {
 
     post {
         always {
-            // ✅ Archive reports
+            // ✅ Archive and publish test reports
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
             publishHTML(reportName: 'Regression Test Report', reportDir: 'reports', reportFiles: 'index.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
 
-            // ✅ Stop Docker Selenium Grid gracefully
+            // 🧹 Stop Grid in all cases (even if already stopped)
             script {
                 echo "🧹 Stopping Docker Selenium Grid..."
                 bat 'docker-compose -f docker-compose-grid.yml down || echo "⚠️ Grid already stopped or not found."'
 
-                // ======================
                 // 📦 Qase.io Integration
-                // ======================
                 try {
                     echo '--- Starting Qase.io Integration ---'
                     def runId
@@ -115,9 +112,7 @@ pipeline {
                     echo "⚠️ Exception in Qase integration: ${err.getMessage()}"
                 }
 
-                // ===========================
-                // 📧 Email Notification Logic
-                // ===========================
+                // 📧 Email Notification
                 def suiteName = "regression"
                 def reportToAttach = "reports/${suiteName}-report.html"
                 def summaryFile = "reports/${suiteName}-failure-summary.txt"
@@ -151,6 +146,24 @@ pipeline {
                         mimeType: 'text/html',
                         attachmentsPattern: reportToAttach
                     )
+                }
+            }
+        }
+
+        failure {
+            // 🧹 Extra cleanup logic on failure
+            echo '⚠️ Build failed. Cleaning up any running Selenium Grid containers...'
+            script {
+                try {
+                    def result = bat(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
+                    if (result) {
+                        echo "🛑 Stopping containers:\n${result}"
+                        bat 'docker-compose -f docker-compose-grid.yml down || echo "Grid already stopped"'
+                    } else {
+                        echo "✅ No active Selenium containers to stop."
+                    }
+                } catch (e) {
+                    echo "⚠️ Docker cleanup error: ${e.getMessage()}"
                 }
             }
         }
