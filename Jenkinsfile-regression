@@ -45,6 +45,8 @@ pipeline {
             steps {
                 echo "🔄 Starting Dockerized Selenium Grid..."
                 bat 'docker-compose -f docker-compose-grid.yml up -d'
+                // ✅ Add wait to allow nodes to register with the hub
+				bat 'ping -n 20 127.0.0.1 > NUL'
             }
         }
 

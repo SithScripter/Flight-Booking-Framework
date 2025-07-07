@@ -33,7 +33,8 @@ pipeline {
             steps {
                 echo '📦 Starting Docker-based Selenium Grid...'
                 bat 'docker-compose -f docker-compose.yml up -d'
-                bat 'timeout /t 20 > NUL' // wait for nodes to register
+				// ✅ Add wait to allow nodes to register with the hub
+				bat 'ping -n 20 127.0.0.1 > NUL'
             }
         }
 
