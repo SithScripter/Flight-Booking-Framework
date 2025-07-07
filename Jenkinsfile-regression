@@ -1,12 +1,13 @@
 pipeline {
     agent any
+
     tools {
         maven 'apache-maven-3.9.9'
         jdk 'JDK 21'
     }
 
     stages {
-        // 🧾 Stage 1: Metadata to help debug and trace the build in logs
+
         stage('Log Build Info') {
             steps {
                 echo "================================================="
@@ -22,85 +23,60 @@ pipeline {
             }
         }
 
-        // 🧪 Confirm which Jenkinsfile is being used (helps when experimenting)
         stage('Confirm Jenkinsfile Source') {
             steps {
                 bat "type Jenkinsfile-regression"
             }
         }
 
-        // 🧹 Clean old files from previous builds
         stage('Clean Workspace') {
             steps {
                 cleanWs()
             }
         }
 
-        // 📥 Check out latest code from Git
         stage('Checkout SCM') {
             steps {
                 checkout scm
-                bat "type Jenkinsfile"  // Print active Jenkinsfile
+                bat "type Jenkinsfile"  // Confirm which Jenkinsfile is being used
             }
         }
 
-        // 🟡 New Stage: Start Selenium Grid (Docker-based) locally before test execution
-        stage('Start Selenium Grid') {
+        stage('Start Selenium Grid (Docker)') {
             steps {
-                echo '🟡 Starting Docker-based Selenium Grid for parallel browser execution...'
+                echo "🔄 Starting Dockerized Selenium Grid..."
                 bat 'docker-compose -f docker-compose-grid.yml up -d'
-                echo '✅ Selenium Grid containers started.'
             }
         }
 
-        // 💤 Optional: Add wait if needed (commented out)
-        // stage('Wait for Grid Readiness') {
-        //     steps {
-        //         bat 'timeout /t 5'  // Wait for containers to fully initialize
-        //     }
-        // }
-
-        // 🚀 Build the project and run tests using Grid (Grid flag passed as system property)
         stage('Build & Run Regression Tests') {
             steps {
-                echo 'Running regression tests on PRODUCTION via Docker Grid...'
-                bat "mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression -Dselenium.grid.enabled=true"
+                echo '🚀 Running regression tests on Grid...'
+                bat "mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression"
             }
         }
     }
 
     post {
         always {
-            // 📁 Archive all test reports regardless of pass/fail
+            // ✅ Archive reports
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+            publishHTML(reportName: 'Regression Test Report', reportDir: 'reports', reportFiles: 'index.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
 
-            // 🧾 Publish the HTML report from ExtentReports
-            publishHTML(
-                reportName: 'Regression Test Report',
-                reportDir: 'reports',
-                reportFiles: 'index.html',
-                keepAll: true,
-                alwaysLinkToLastBuild: true,
-                allowMissing: true
-            )
-
-            // 🛑 Tear down Selenium Grid containers after test run
-            stage('Stop Selenium Grid') {
-                steps {
-                    echo '🧹 Stopping and cleaning Docker Grid containers...'
-                    bat 'docker-compose -f docker-compose-grid.yml down'
-                    echo '✅ Docker Grid shutdown complete.'
-                }
-            }
-
-            // 🧪 Qase.io Test Result Upload
+            // ✅ Stop Docker Selenium Grid gracefully
             script {
+                echo "🧹 Stopping Docker Selenium Grid..."
+                bat 'docker-compose -f docker-compose-grid.yml down || echo "⚠️ Grid already stopped or not found."'
+
+                // ======================
+                // 📦 Qase.io Integration
+                // ======================
                 try {
                     echo '--- Starting Qase.io Integration ---'
                     def runId
 
                     withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
-                        echo '1. Creating a new Test Run on Qase...'
+                        echo '1. Creating a new Test Run...'
                         bat """
                             curl -s -X POST "https://api.qase.io/v1/run/FB" ^
                             -H "accept: application/json" ^
@@ -109,14 +85,13 @@ pipeline {
                             -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
                             -o response.json
                         """
-
                         def responseJson = readJSON file: 'response.json'
 
                         if (responseJson.status) {
                             runId = responseJson.result.id
-                            echo "✅ Successfully created Qase Test Run with ID: ${runId}"
+                            echo "✅ Qase Test Run ID: ${runId}"
 
-                            echo "2. Uploading TestNG results to Qase..."
+                            echo "2. Uploading results to Qase..."
                             bat """
                                 curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
                                 -H "accept: application/json" ^
@@ -125,24 +100,24 @@ pipeline {
                                 -F "file=@target/surefire-reports/testng-results.xml"
                             """
 
-                            echo "✅ Test results uploaded."
-
-                            echo "3. Marking Test Run as complete..."
+                            echo "3. Marking Qase run as complete..."
                             bat """
                                 curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
                                 -H "accept: application/json" ^
                                 -H "Token: %QASE_TOKEN%"
                             """
-                            echo "✅ Qase Test Run marked as complete."
+                            echo "✅ Qase run marked as complete."
                         } else {
-                            echo "⚠️ Failed to create Qase Test Run. Response: ${responseJson}"
+                            echo "⚠️ Qase error during run creation. Response: ${responseJson}"
                         }
                     }
                 } catch (Exception err) {
-                    echo "⚠️ Exception during Qase.io integration: ${err.getMessage()}"
+                    echo "⚠️ Exception in Qase integration: ${err.getMessage()}"
                 }
 
-                // 📧 Email Notification Setup
+                // ===========================
+                // 📧 Email Notification Logic
+                // ===========================
                 def suiteName = "regression"
                 def reportToAttach = "reports/${suiteName}-report.html"
                 def summaryFile = "reports/${suiteName}-failure-summary.txt"
@@ -154,7 +129,10 @@ pipeline {
 
                 if (currentBuild.currentResult == 'SUCCESS') {
                     emailSubject = "✅ SUCCESS: Nightly Regression Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
-                    emailBody = """<p>Nightly regression build was successful.</p><p><b><a href='${reportURL}'>📄 View Full Regression Report</a></b></p>"""
+                    emailBody = """
+                        <p>Nightly regression build was successful.</p>
+                        <p><b><a href='${reportURL}'>📄 View Full Regression Report</a></b></p>
+                    """
                 } else {
                     emailSubject = "❌ FAILURE: Nightly Regression Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
                     emailBody = """
