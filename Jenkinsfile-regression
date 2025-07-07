@@ -53,7 +53,7 @@ pipeline {
         stage('Build & Run Regression Tests') {
             steps {
                 echo '🚀 Running regression tests on Grid...'
-                bat "mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression"
+                bat "mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression -Dbrowser.headless=true"
             }
         }
     }

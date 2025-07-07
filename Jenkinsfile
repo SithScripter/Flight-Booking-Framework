@@ -41,7 +41,7 @@ pipeline {
         stage('Build & Run Smoke Tests') {
             steps {
                 echo "🧪 Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
-                bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke"
+                bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke -Dbrowser.headless=true"
             }
         }
 

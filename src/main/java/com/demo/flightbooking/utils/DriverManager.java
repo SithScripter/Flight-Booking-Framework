@@ -39,14 +39,22 @@ public class DriverManager {
             String browser = browserName.get() != null
                     ? browserName.get()
                     : ConfigReader.getProperty("browser");
+
+            // ✅ Load browser type from config or testng.xml
             BrowserType browserType = BrowserType.valueOf(browser.toUpperCase());
 
+            // ✅ Read headless flag from config.properties
+            boolean isHeadless = Boolean.parseBoolean(ConfigReader.getProperty("browser.headless"));
+            logger.info("Headless mode enabled? {}", isHeadless);
+
+            // ✅ Read Grid toggle
             boolean useGrid = Boolean.parseBoolean(ConfigReader.getProperty("selenium.grid.enabled"));
-            logger.info("Grid enabled? " + useGrid);
+            logger.info("Grid enabled? {}", useGrid);
             logger.info("Execution mode: {}", useGrid ? "REMOTE (Grid)" : "LOCAL");
             logger.info("Initializing {} driver for thread: {}", browserType, Thread.currentThread().threadId());
 
-            MutableCapabilities options = BrowserOptionsFactory.getOptions(browserType);
+            // ✅ Fetch browser-specific options with headless flag
+            MutableCapabilities options = BrowserOptionsFactory.getOptions(browserType, isHeadless);
 
             if (useGrid) {
                 try {
