@@ -4,120 +4,150 @@ pipeline {
         maven 'apache-maven-3.9.9'
         jdk 'JDK 21'
     }
+
     stages {
-		// Stage 1: for providing LOg Build Info-good for debugging
-		stage('Log Build Info')
-		{
-			steps
-			{
-				// This 'echo' step prints a clear header to the console log for easy reading.
-				echo "================================================="
-				echo "          BUILD & TEST METADATA"
-				echo "================================================="
-				// Jenkins provides environment variables that give us context about the build.
-				echo "Job: ${env.JOB_NAME}"
-				echo "Build Number: ${env.BUILD_NUMBER}"
-				echo "Workspace: ${env.WORKSPACE}"
-				// The 'currentBuild' global variable gives us more detailed information about the trigger.
-				echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
-				// For Git-based projects, Jenkins provides specific SCM variables.
-				echo "Branch: ${env.BRANCH_NAME}"
-				echo "Commit: ${env.GIT_COMMIT}"
-				echo "================================================="
-			}
-		}
-		stage('Confirm Jenkinsfile Source') {
-			steps {
-				bat "type Jenkinsfile-regression"
-			}
-		}
-        stage('Clean Workspace') { steps { cleanWs() } }
-		stage('Checkout SCM') {
-			steps {
-			  checkout scm
-			  bat "type Jenkinsfile"  // ← Print the Jenkinsfile being executed
-			}
-		  }
+        // 🧾 Stage 1: Metadata to help debug and trace the build in logs
+        stage('Log Build Info') {
+            steps {
+                echo "================================================="
+                echo "          BUILD & TEST METADATA"
+                echo "================================================="
+                echo "Job: ${env.JOB_NAME}"
+                echo "Build Number: ${env.BUILD_NUMBER}"
+                echo "Workspace: ${env.WORKSPACE}"
+                echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
+                echo "Branch: ${env.BRANCH_NAME}"
+                echo "Commit: ${env.GIT_COMMIT}"
+                echo "================================================="
+            }
+        }
+
+        // 🧪 Confirm which Jenkinsfile is being used (helps when experimenting)
+        stage('Confirm Jenkinsfile Source') {
+            steps {
+                bat "type Jenkinsfile-regression"
+            }
+        }
+
+        // 🧹 Clean old files from previous builds
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        // 📥 Check out latest code from Git
+        stage('Checkout SCM') {
+            steps {
+                checkout scm
+                bat "type Jenkinsfile"  // Print active Jenkinsfile
+            }
+        }
+
+        // 🟡 New Stage: Start Selenium Grid (Docker-based) locally before test execution
+        stage('Start Selenium Grid') {
+            steps {
+                echo '🟡 Starting Docker-based Selenium Grid for parallel browser execution...'
+                bat 'docker-compose -f docker-compose-grid.yml up -d'
+                echo '✅ Selenium Grid containers started.'
+            }
+        }
+
+        // 💤 Optional: Add wait if needed (commented out)
+        // stage('Wait for Grid Readiness') {
+        //     steps {
+        //         bat 'timeout /t 5'  // Wait for containers to fully initialize
+        //     }
+        // }
+
+        // 🚀 Build the project and run tests using Grid (Grid flag passed as system property)
         stage('Build & Run Regression Tests') {
             steps {
-                echo 'Running regression tests on QA...'
-                bat "mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression"
+                echo 'Running regression tests on PRODUCTION via Docker Grid...'
+                bat "mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression -Dselenium.grid.enabled=true"
             }
         }
     }
+
     post {
         always {
+            // 📁 Archive all test reports regardless of pass/fail
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-            publishHTML(reportName: 'Regression Test Report', reportDir: 'reports', reportFiles: 'index.html', keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true)
-            
+
+            // 🧾 Publish the HTML report from ExtentReports
+            publishHTML(
+                reportName: 'Regression Test Report',
+                reportDir: 'reports',
+                reportFiles: 'index.html',
+                keepAll: true,
+                alwaysLinkToLastBuild: true,
+                allowMissing: true
+            )
+
+            // 🛑 Tear down Selenium Grid containers after test run
+            stage('Stop Selenium Grid') {
+                steps {
+                    echo '🧹 Stopping and cleaning Docker Grid containers...'
+                    bat 'docker-compose -f docker-compose-grid.yml down'
+                    echo '✅ Docker Grid shutdown complete.'
+                }
+            }
+
+            // 🧪 Qase.io Test Result Upload
             script {
-                // --- Qase.io Integration ---
-				try
-				{
-					echo '--- Starting Qase.io Integration ---'
-					def runId
+                try {
+                    echo '--- Starting Qase.io Integration ---'
+                    def runId
 
-					withCredentials([
-						string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')
-					])
-					{
-						// Step 1: Create the Test Run
-						echo '1. Creating a new Test Run...'
-						bat """
-                curl -s -X POST "https://api.qase.io/v1/run/FB" ^
-                -H "accept: application/json" ^
-                -H "Content-Type: application/json" ^
-                -H "Token: %QASE_TOKEN%" ^
-                -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
-                -o response.json
-            """
-						def responseJson = readJSON file: 'response.json'
+                    withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
+                        echo '1. Creating a new Test Run on Qase...'
+                        bat """
+                            curl -s -X POST "https://api.qase.io/v1/run/FB" ^
+                            -H "accept: application/json" ^
+                            -H "Content-Type: application/json" ^
+                            -H "Token: %QASE_TOKEN%" ^
+                            -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
+                            -o response.json
+                        """
 
-						if (responseJson.status)
-						{
-							runId = responseJson.result.id
-							echo "✅ Successfully created Qase Test Run with ID: ${runId}"
+                        def responseJson = readJSON file: 'response.json'
 
-							// Step 2: Upload TestNG results to the correct endpoint using PATCH
-							echo "2. Uploading TestNG results to Run ID: ${runId}..."
-							bat """
-                    curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
-                    -H "accept: application/json" ^
-                    -H "Content-Type: multipart/form-data" ^
-                    -H "Token: %QASE_TOKEN%" ^
-                    -F "file=@target/surefire-reports/testng-results.xml"
-                """
-							echo "✅ Test results uploaded to Qase.io."
+                        if (responseJson.status) {
+                            runId = responseJson.result.id
+                            echo "✅ Successfully created Qase Test Run with ID: ${runId}"
 
-							// Step 3: Mark the Test Run as complete
-							echo "3. Marking Qase Test Run as complete..."
-							bat """
-                    curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
-                    -H "accept: application/json" ^
-                    -H "Token: %QASE_TOKEN%"
-                """
-							echo "✅ Qase Test Run ${runId} marked as complete."
-						} else
-						{
-							echo "⚠️ Warning: Qase API returned an error during run creation. Response: ${responseJson}"
-						}
-					}
-				} catch (Exception err)
-				{
-					echo "⚠️ Warning: An exception occurred during Qase.io integration. Error: ${err.getMessage()}"
-				}
+                            echo "2. Uploading TestNG results to Qase..."
+                            bat """
+                                curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
+                                -H "accept: application/json" ^
+                                -H "Content-Type: multipart/form-data" ^
+                                -H "Token: %QASE_TOKEN%" ^
+                                -F "file=@target/surefire-reports/testng-results.xml"
+                            """
 
-                // --- Email Notification Logic ---
-				def suiteName = "regression"
-//                def reportToAttach = 'reports/regression-report.html'
-				def reportToAttach = "reports/${suiteName}-report.html"
-				
-//                def summaryFile = 'reports/regression-failure-summary.txt'
-				def summaryFile = "reports/${suiteName}-failure-summary.txt"
-				
+                            echo "✅ Test results uploaded."
+
+                            echo "3. Marking Test Run as complete..."
+                            bat """
+                                curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
+                                -H "accept: application/json" ^
+                                -H "Token: %QASE_TOKEN%"
+                            """
+                            echo "✅ Qase Test Run marked as complete."
+                        } else {
+                            echo "⚠️ Failed to create Qase Test Run. Response: ${responseJson}"
+                        }
+                    }
+                } catch (Exception err) {
+                    echo "⚠️ Exception during Qase.io integration: ${err.getMessage()}"
+                }
+
+                // 📧 Email Notification Setup
+                def suiteName = "regression"
+                def reportToAttach = "reports/${suiteName}-report.html"
+                def summaryFile = "reports/${suiteName}-failure-summary.txt"
                 def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : ""
-//                def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
-				def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
+                def reportURL = "${env.BUILD_URL}Regression-Test-Report/"
 
                 def emailSubject
                 def emailBody

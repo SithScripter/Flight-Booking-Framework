@@ -1,86 +1,106 @@
 package com.demo.flightbooking.utils;
 
+import com.demo.flightbooking.enums.BrowserType;
+import com.demo.flightbooking.factory.BrowserOptionsFactory;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
 import java.time.Duration;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
+import org.openqa.selenium.MutableCapabilities;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.edge.EdgeDriver;
+import org.openqa.selenium.edge.EdgeOptions;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.firefox.FirefoxOptions;
+import org.openqa.selenium.remote.RemoteWebDriver;
 
-import io.github.bonigarcia.wdm.WebDriverManager;
-
-/**
- * DriverManager is a utility class that handles creation, access, and cleanup of WebDriver instances.
- * <p>
- * It ensures thread-safe browser sessions using ThreadLocal, which is crucial for parallel test execution.
- */
 public class DriverManager {
 
-    // Logger to record driver-related actions (initialization, errors, cleanup)
     private static final Logger logger = LogManager.getLogger(DriverManager.class);
-
-    /**
-     * Thread-local storage to ensure each parallel test thread gets its own isolated WebDriver instance.
-     * <p>
-     * Prevents test interference during parallel execution.
-     */
     private static final ThreadLocal<WebDriver> driver = new ThreadLocal<>();
+    private static final ThreadLocal<String> browserName = new ThreadLocal<>();
 
-    /**
-     * Returns the WebDriver instance for the current thread.
-     * <p>
-     * If not already initialized, this method creates a new driver instance based on config/browser property.
-     *
-     * @return WebDriver instance for the calling thread
-     */
+    public static void setBrowser(String browser) {
+        logger.info("Setting browser for current thread to: {}", browser.toUpperCase());
+        browserName.set(browser.toLowerCase());
+    }
+
+    public static String getBrowser() {
+        return browserName.get();
+    }
+
     public static WebDriver getDriver() {
         if (driver.get() == null) {
-            // Read browser value from system property first, then fallback to config
-            String browser = System.getProperty("browser", ConfigReader.getProperty("browser")).toLowerCase();
+            String browser = browserName.get() != null
+                    ? browserName.get()
+                    : ConfigReader.getProperty("browser");
+            BrowserType browserType = BrowserType.valueOf(browser.toUpperCase());
 
-            logger.info("Initializing {} driver", browser);
+            boolean useGrid = Boolean.parseBoolean(ConfigReader.getProperty("selenium.grid.enabled"));
+            logger.info("Grid enabled? " + useGrid);
+            logger.info("Execution mode: {}", useGrid ? "REMOTE (Grid)" : "LOCAL");
+            logger.info("Initializing {} driver for thread: {}", browserType, Thread.currentThread().getId());
 
-            // Setup and initialize driver based on browser type
-            switch (browser) {
-                case "chrome":
-                    WebDriverManager.chromedriver().setup();
-                    driver.set(new ChromeDriver());
-                    break;
-                case "firefox":
-                    WebDriverManager.firefoxdriver().setup();
-                    driver.set(new FirefoxDriver());
-                    break;
-                case "edge":
-                    WebDriverManager.edgedriver().setup();
-                    driver.set(new EdgeDriver());
-                    break;
-                default:
-                    // If an unsupported browser is passed, throw runtime error
-                    logger.error("Unsupported browser: {}", browser);
-                    throw new RuntimeException("Unsupported browser: " + browser);
+            MutableCapabilities options = BrowserOptionsFactory.getOptions(browserType);
+
+            if (useGrid) {
+                try {
+                    // Validate required properties
+                    String hubHost = ConfigReader.getProperty("selenium.hubHost");
+                    String urlFormat = ConfigReader.getProperty("seleniumhub.urlFormat");
+
+                    if (hubHost == null || hubHost.isEmpty()) {
+                        throw new RuntimeException("Missing hubHost or urlFormat in config.properties");
+                    }
+                    if (urlFormat == null || urlFormat.isEmpty()) {
+                        throw new RuntimeException("⚠️ seleniumhub.urlFormat property is missing in config.properties");
+                    }
+
+                    String fullUrl = String.format(urlFormat, hubHost);
+                    logger.info("Connecting to Selenium Grid at: {}", fullUrl);
+
+                    URL gridUrl = URI.create(fullUrl).toURL(); // Safe in Java 20+
+
+                    driver.set(new RemoteWebDriver(gridUrl, options));
+                } catch (MalformedURLException e) {
+                    logger.error("❌ Malformed Selenium Grid URL: {}", e.getMessage());
+                    throw new RuntimeException("Invalid Selenium Grid URL", e);
+                }
+            } else {
+                // Local Mode
+                switch (browserType) {
+                    case CHROME:
+                        driver.set(new ChromeDriver((ChromeOptions) options));
+                        break;
+                    case FIREFOX:
+                        driver.set(new FirefoxDriver((FirefoxOptions) options));
+                        break;
+                    case EDGE:
+                        driver.set(new EdgeDriver((EdgeOptions) options));
+                        break;
+                    default:
+                        throw new IllegalStateException("Unsupported browser type: " + browserType);
+                }
             }
 
-            // Basic browser setup — maximize and disable implicit wait
             driver.get().manage().window().maximize();
-            driver.get().manage().timeouts().implicitlyWait(Duration.ofSeconds(0)); // Explicit waits preferred
+            driver.get().manage().timeouts().implicitlyWait(Duration.ofSeconds(0));
         }
 
         return driver.get();
     }
 
-    /**
-     * Cleans up and quits the WebDriver instance for the current thread.
-     * <p>
-     * Called at the end of each test to avoid memory leaks or session issues.
-     */
     public static void quitDriver() {
         if (driver.get() != null) {
-            logger.info("Quitting driver");
-            driver.get().quit();    // Closes browser window
-            driver.remove();        // Clears ThreadLocal to prevent stale reference
+            logger.info("Quitting driver for thread: {}", Thread.currentThread().getId());
+            driver.get().quit();
+            driver.remove();
+            browserName.remove();
         }
     }
 }
