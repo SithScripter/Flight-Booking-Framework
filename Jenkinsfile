@@ -32,7 +32,7 @@ pipeline {
         stage('Start Selenium Grid (Docker)') {
             steps {
                 echo '📦 Starting Docker-based Selenium Grid...'
-                bat 'docker-compose -f docker-compose.yml up -d'
+                bat 'docker-compose -f docker-compose-grid.yml up -d'
 				// ✅ Add wait to allow nodes to register with the hub
 				bat 'ping -n 20 127.0.0.1 > NUL'
             }
@@ -48,7 +48,7 @@ pipeline {
         stage('Stop Selenium Grid') {
             steps {
                 echo '🛑 Stopping Docker-based Selenium Grid...'
-                bat 'docker-compose -f docker-compose.yml down'
+                bat 'docker-compose -f docker-compose-grid.yml down'
             }
         }
     }
