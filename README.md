@@ -25,7 +25,7 @@ This is a hybrid Selenium + TestNG automation framework for the BlazeDemo websit
 | Suite       | Trigger         | Runs In      | TestNG XML                          | Profile ID |
 |-------------|------------------|--------------|-------------------------------------|------------|
 | Smoke       | GitHub push      | Jenkins CI   | `testng-smoke.xml`                  | `smoke`    |
-| Regression  | Nightly (12 AM)  | Jenkins CI   | `testng-regression.xml`             | `regression` |
+| Regression  | Nightly (2 AM)  | Jenkins CI   | `testng-regression.xml`             | `regression` |
 
 > All test classes extend `BaseTest.java` and support parallel browser execution.
 
@@ -144,29 +144,7 @@ services:
       - SE_NODE_MAX_SESSIONS=2
 Both nodes support up to 2 sessions each (for parallelism).
 
-📦 Framework Architecture
-css
-Copy
-Edit
-.
-├── Jenkinsfile
-├── docker-compose-grid.yml
-├── pom.xml
-├── reports/
-├── screenshots/
-├── src/
-│   ├── main/
-│   └── test/
-│       ├── java/com/demo/flightbooking/
-│       │   ├── base/
-│       │   ├── pages/
-│       │   ├── tests/
-│       │   ├── utils/
-│       │   └── listeners/
-│       └── resources/
-│           └── test-suites/
-│               ├── testng-smoke.xml
-│               └── testng-regression.xml
+
 ☁️ To Do Later (Optional Enhancements)
 Feature	Purpose
 GitHub Actions CI/CD	Migrate CI to GitHub-hosted runners
