@@ -1,13 +1,5 @@
 package com.demo.flightbooking.tests.base;
 
-import com.aventstack.extentreports.ExtentReports;
-import com.aventstack.extentreports.ExtentTest;
-import com.aventstack.extentreports.Status;
-import com.aventstack.extentreports.reporter.ExtentSparkReporter;
-import com.demo.flightbooking.utils.ConfigReader;
-import com.demo.flightbooking.utils.DriverManager;
-import com.demo.flightbooking.utils.ExtentManager;
-import com.demo.flightbooking.utils.ScreenshotUtils;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -19,16 +11,25 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.WebDriver;
 import org.testng.ITestResult;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.AfterSuite;
-import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.Parameters;
+
+import com.aventstack.extentreports.ExtentReports;
+import com.aventstack.extentreports.ExtentTest;
+import com.aventstack.extentreports.Status;
+import com.aventstack.extentreports.reporter.ExtentSparkReporter;
+import com.demo.flightbooking.utils.ConfigReader;
+import com.demo.flightbooking.utils.DriverManager;
+import com.demo.flightbooking.utils.ExtentManager;
+import com.demo.flightbooking.utils.ScreenshotUtils;
 
 public class BaseTest {
 

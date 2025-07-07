@@ -1,13 +1,13 @@
 package com.demo.flightbooking.pages;
 
-import com.demo.flightbooking.utils.ConfigReader;
+import java.time.Duration;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.support.PageFactory;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
-import java.time.Duration;
+import com.demo.flightbooking.utils.ConfigReader;
 
 /**
  * Base class for all Page Objects.

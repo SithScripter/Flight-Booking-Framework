@@ -18,9 +18,11 @@ import com.demo.flightbooking.utils.ExtentManager;
 public class TestListener implements ITestListener, IAnnotationTransformer {
 
 	@Override
+	@SuppressWarnings({ "rawtypes"})
 	public void transform(ITestAnnotation annotation, Class testClass, Constructor testConstructor, Method testMethod) {
-		annotation.setRetryAnalyzer(RetryAnalyzer.class);
+	    annotation.setRetryAnalyzer(RetryAnalyzer.class);
 	}
+
 
 	// ... other onTestStart, onTestSuccess methods remain the same
 

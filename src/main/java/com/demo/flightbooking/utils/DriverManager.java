@@ -44,7 +44,7 @@ public class DriverManager {
             boolean useGrid = Boolean.parseBoolean(ConfigReader.getProperty("selenium.grid.enabled"));
             logger.info("Grid enabled? " + useGrid);
             logger.info("Execution mode: {}", useGrid ? "REMOTE (Grid)" : "LOCAL");
-            logger.info("Initializing {} driver for thread: {}", browserType, Thread.currentThread().getId());
+            logger.info("Initializing {} driver for thread: {}", browserType, Thread.currentThread().threadId());
 
             MutableCapabilities options = BrowserOptionsFactory.getOptions(browserType);
 
@@ -97,7 +97,7 @@ public class DriverManager {
 
     public static void quitDriver() {
         if (driver.get() != null) {
-            logger.info("Quitting driver for thread: {}", Thread.currentThread().getId());
+            logger.info("Quitting driver for thread: {}", Thread.currentThread().threadId());
             driver.get().quit();
             driver.remove();
             browserName.remove();
