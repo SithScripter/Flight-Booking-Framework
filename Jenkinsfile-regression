@@ -48,14 +48,14 @@ pipeline {
                 stage('Test on Chrome') {
                     steps {
                         echo 'Running regression tests on Chrome...'
-                        bat 'mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression -Dbrowser=CHROME -Dreport.dir=chrome -Dbrowser.headless=true'
+                        bat 'mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression -Dbrowser=CHROME -Dreport.dir=chrome -Dbrowser.headless=true -Dtarget.folder=target-chrome -Duser.dir=%WORKSPACE%'
                         bat 'dir /s reports'
                     }
                 }
                 stage('Test on Firefox') {
                     steps {
                         echo 'Running regression tests on Firefox...'
-                        bat 'mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression -Dbrowser=FIREFOX -Dreport.dir=firefox -Dbrowser.headless=true'
+                        bat 'mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression -Dbrowser=FIREFOX -Dreport.dir=firefox -Dbrowser.headless=true -Dtarget.folder=target-firefox -Duser.dir=%WORKSPACE%'
                         bat 'dir /s reports'
                     }
                 }
