@@ -44,7 +44,6 @@ pipeline {
         }
 
         stage('Run Parallel Regression Tests') {
-            failFast: false
             parallel {
                 stage('Test on Chrome') {
                     steps {
@@ -66,9 +65,10 @@ pipeline {
         always {
             echo '📦 Archiving reports and publishing HTML dashboards...'
 
+            // Archive all browser reports
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
-            // ✅ Individual browser reports
+            // Individual browser reports
             publishHTML([
                 reportName: 'Chrome Report',
                 reportDir: 'reports/chrome',
@@ -82,7 +82,7 @@ pipeline {
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
 
-            // ✅ Cumulative dashboard
+            // Cumulative report
             publishHTML([
                 reportName: 'Cumulative Dashboard',
                 reportDir: 'reports',
@@ -90,12 +90,12 @@ pipeline {
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
 
-            // ✅ Stop Grid
+            // Stop Grid
             script {
                 echo "🧹 Stopping Docker Selenium Grid..."
                 bat 'docker-compose -f docker-compose-grid.yml down || echo "⚠️ Grid already stopped or not found."'
 
-                // ✅ Qase Integration (unchanged)
+                // Qase Integration
                 try {
                     echo '--- Starting Qase.io Integration ---'
                     def runId
@@ -140,7 +140,7 @@ pipeline {
                     echo "⚠️ Exception in Qase integration: ${err.getMessage()}"
                 }
 
-                // ✅ Email Notification
+                // Email Notification
                 def suiteName = "regression"
                 def reportToAttach = "reports/${suiteName}-report.html"
                 def summaryFile = "reports/${suiteName}-failure-summary.txt"
