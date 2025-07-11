@@ -31,7 +31,7 @@ pipeline {
         stage('Checkout SCM') {
             steps {
                 checkout scm
-                bat "type Jenkinsfile"
+                bat "type Jenkinsfile-regression"
             }
         }
 
@@ -44,20 +44,34 @@ pipeline {
         }
 
         stage('Run Parallel Regression Tests') {
+            failFast false
             parallel {
                 stage('Test on Chrome') {
                     steps {
-                        echo 'Running regression tests on Chrome...'
-                        bat 'mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression -Dbrowser=CHROME -Dreport.dir=chrome -Dbrowser.headless=true -Dtarget.folder=target-chrome'
-                        //bat mvn clean test -P regression -Denv=PRODUCTION -Dbrowser=CHROME -Dreport.dir=chrome -Dtarget.folder=target-chrome -Dbasedir=target-chrome
-
+                        echo '🧪 Running regression tests on Chrome...'
+                        bat """
+                            mvn clean test ^
+                            -P regression ^
+                            -Denv=PRODUCTION ^
+                            -Dtest.suite=regression ^
+                            -Dbrowser=CHROME ^
+                            -Dreport.dir=chrome ^
+                            -Dbrowser.headless=true
+                        """
                     }
                 }
                 stage('Test on Firefox') {
                     steps {
-                        echo 'Running regression tests on Firefox...'
-                       bat 'mvn clean test -P regression -Denv=PRODUCTION -Dtest.suite=regression -Dbrowser=FIREFOX -Dreport.dir=firefox -Dbrowser.headless=true -Dtarget.folder=target-firefox'
-                       //bat mvn clean test -P regression -Denv=PRODUCTION -Dbrowser=FIREFOX -Dreport.dir=firefox -Dtarget.folder=target-firefox -Dbasedir=target-firefox
+                        echo '🧪 Running regression tests on Firefox...'
+                        bat """
+                            mvn clean test ^
+                            -P regression ^
+                            -Denv=PRODUCTION ^
+                            -Dtest.suite=regression ^
+                            -Dbrowser=FIREFOX ^
+                            -Dreport.dir=firefox ^
+                            -Dbrowser.headless=true
+                        """
                     }
                 }
             }
@@ -68,24 +82,23 @@ pipeline {
         always {
             echo '📦 Archiving reports and publishing HTML dashboards...'
 
-            // Archive all browser reports
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
-            // Individual browser reports
+            // ✅ Individual browser reports
             publishHTML([
                 reportName: 'Chrome Report',
                 reportDir: 'reports/chrome',
-                reportFiles: 'regression-chrome-report.html',
+                reportFiles: 'index.html',
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
             publishHTML([
                 reportName: 'Firefox Report',
                 reportDir: 'reports/firefox',
-                reportFiles: 'regression-firefox-report.html',
+                reportFiles: 'index.html',
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
 
-            // Cumulative report
+            // ✅ Optional Cumulative Dashboard (from one of the reports)
             publishHTML([
                 reportName: 'Cumulative Dashboard',
                 reportDir: 'reports',
@@ -93,12 +106,12 @@ pipeline {
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
 
-            // Stop Grid
+            // 🧹 Stop Docker Grid
             script {
                 echo "🧹 Stopping Docker Selenium Grid..."
                 bat 'docker-compose -f docker-compose-grid.yml down || echo "⚠️ Grid already stopped or not found."'
 
-                // Qase Integration
+                // ✅ Qase.io Integration
                 try {
                     echo '--- Starting Qase.io Integration ---'
                     def runId
@@ -143,9 +156,8 @@ pipeline {
                     echo "⚠️ Exception in Qase integration: ${err.getMessage()}"
                 }
 
-                // Email Notification
+                // ✅ Email Notification
                 def suiteName = "regression"
-                def reportToAttach = "reports/${suiteName}-report.html"
                 def summaryFile = "reports/${suiteName}-failure-summary.txt"
                 def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : ""
                 def reportURL = "${env.BUILD_URL}Cumulative-Dashboard/"
@@ -175,14 +187,14 @@ pipeline {
                         body: emailBody,
                         to: RECIPIENT_EMAILS,
                         mimeType: 'text/html',
-                        attachmentsPattern: reportToAttach
+                        attachmentsPattern: "reports/${suiteName}-report.html"
                     )
                 }
             }
         }
 
         failure {
-            echo '⚠️ Build failed. Cleaning up any running Selenium Grid containers...'
+            echo '⚠️ Build failed. Cleaning up Selenium containers...'
             script {
                 try {
                     def result = bat(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
