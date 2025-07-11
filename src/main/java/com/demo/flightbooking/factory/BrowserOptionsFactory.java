@@ -33,7 +33,7 @@ public class BrowserOptionsFactory {
             case CHROME:
                 // --- THIS IS THE CHANGE ---
                 // WebDriverManager setup is now handled here.
-                WebDriverManager.chromedriver().setup();
+                WebDriverManager.chromedriver().setup();	
                 ChromeOptions chromeOptions = new ChromeOptions();
                 chromeOptions.addArguments("--start-maximized");
                 chromeOptions.addArguments("--disable-gpu");
