@@ -1,3 +1,4 @@
+@Library('my-automation-library') _
 pipeline {
     agent any
 
@@ -189,45 +190,11 @@ pipeline {
                 bat 'docker-compose -f docker-compose-grid.yml down || echo "⚠️ Grid already stopped or not found."'
 
                 // ✅ Qase Integration
-                try {
-                    echo '--- Starting Qase.io Integration ---'
-                    def runId
-                    withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
-                        echo '1. Creating a new Test Run...'
-                        bat """
-                            curl -s -X POST "https://api.qase.io/v1/run/FB" ^
-                            -H "accept: application/json" ^
-                            -H "Content-Type: application/json" ^
-                            -H "Token: %QASE_TOKEN%" ^
-                            -d "{\\"title\\":\\"${env.JOB_NAME} - Build ${env.BUILD_NUMBER}\\", \\"cases\\":[2]}" ^
-                            -o response.json
-                        """
-                        def responseJson = readJSON file: 'response.json'
-                        if (responseJson.status) {
-                            runId = responseJson.result.id
-                            echo "✅ Qase Test Run ID: ${runId}"
-                            echo "2. Uploading results to Qase..."
-                            bat """
-                                curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
-                                -H "accept: application/json" ^
-                                -H "Content-Type: multipart/form-data" ^
-                                -H "Token: %QASE_TOKEN%" ^
-                                -F "file=@target/surefire-reports/testng-results.xml"
-                            """
-                            echo "3. Marking Qase run as complete..."
-                            bat """
-                                curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
-                                -H "accept: application/json" ^
-                                -H "Token: %QASE_TOKEN%"
-                            """
-                            echo "✅ Qase run marked as complete."
-                        } else {
-                            echo "⚠️ Qase error during run creation. Response: ${responseJson}"
-                        }
-                    }
-                } catch (Exception err) {
-                    echo "⚠️ Exception in Qase integration: ${err.getMessage()}"
-                }
+				updateQase(
+					projectCode: 'FB',
+					credentialsId: 'qase-api-token',
+					testCaseIds: '[1, 2]'
+				)
 
                 // ✅ Email Notifications
                 def suiteName = "regression"
