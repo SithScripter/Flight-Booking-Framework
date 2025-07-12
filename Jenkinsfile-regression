@@ -43,31 +43,40 @@ pipeline {
             }
         }
 
-        stage('Regression - Chrome') {
-            steps {
-                bat """
-                    mvn clean test ^
-                    -P regression ^
-                    -Denv=PRODUCTION ^
-                    -Dtest.suite=regression ^
-                    -Dbrowser=CHROME ^
-                    -Dreport.dir=chrome ^
-                    -Dbrowser.headless=true
-                """
-            }
-        }
+        stage('Run Parallel Regression Tests') {
+            failFast false
+            parallel {
+                stage('Test on Chrome') {
+                    steps {
+                        echo '🧪 Running regression tests on Chrome...'
+                        bat """
+                            mvn clean test ^
+                            -P regression ^
+                            -Denv=PRODUCTION ^
+                            -Dtest.suite=regression ^
+                            -Dbrowser=CHROME ^
+                            -Dreport.dir=chrome ^
+                            -Dbrowser.headless=true ^
+                            -Dmaven.repo.local=.m2-chrome
+                        """
+                    }
+                }
 
-        stage('Regression - Firefox') {
-            steps {
-                bat """
-                    mvn clean test ^
-                    -P regression ^
-                    -Denv=PRODUCTION ^
-                    -Dtest.suite=regression ^
-                    -Dbrowser=FIREFOX ^
-                    -Dreport.dir=firefox ^
-                    -Dbrowser.headless=true
-                """
+                stage('Test on Firefox') {
+                    steps {
+                        echo '🧪 Running regression tests on Firefox...'
+                        bat """
+                            mvn clean test ^
+                            -P regression ^
+                            -Denv=PRODUCTION ^
+                            -Dtest.suite=regression ^
+                            -Dbrowser=FIREFOX ^
+                            -Dreport.dir=firefox ^
+                            -Dbrowser.headless=true ^
+                            -Dmaven.repo.local=.m2-firefox
+                        """
+                    }
+                }
             }
         }
     }
@@ -76,28 +85,44 @@ pipeline {
         always {
             echo '📦 Archiving reports and publishing HTML dashboards...'
 
-            // ✅ Dynamically generate a simple HTML dashboard with links to Chrome & Firefox reports
-            // This replaces the blank cumulative dashboard
+            // ✅ Generate simple cumulative dashboard that links to both reports
             script {
+                def suiteName = "regression"
+                def summaryFile = "reports/${suiteName}-failure-summary.txt"
+                def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : "✅ All tests passed."
+
                 writeFile file: 'reports/index.html', text: """
                 <!DOCTYPE html>
                 <html>
-                <head><title>Regression Test Dashboard</title></head>
-                <body style="font-family:Arial; padding:20px;">
+                <head>
+                    <title>Regression Test Dashboard</title>
+                    <style>
+                        body { font-family: Arial; padding: 20px; background-color: #f4f4f4; }
+                        h1 { color: #222; }
+                        ul { list-style-type: none; padding-left: 0; }
+                        li { margin: 10px 0; }
+                        a { color: #1976D2; font-size: 16px; text-decoration: none; }
+                        .failures { background-color: #fff3f3; padding: 10px; border-left: 4px solid #f44336; white-space: pre-line; font-family: monospace; margin-top: 20px; }
+                    </style>
+                </head>
+                <body>
                     <h1>📊 Regression Test Dashboard</h1>
                     <ul>
-                        <li><a href="chrome/index.html" target="_blank">🧪 Chrome Report</a></li>
-                        <li><a href="firefox/index.html" target="_blank">🧪 Firefox Report</a></li>
+                        <li>🧪 <a href="chrome/index.html" target="_blank">Chrome Report</a></li>
+                        <li>🧪 <a href="firefox/index.html" target="_blank">Firefox Report</a></li>
                     </ul>
-                    <p><b>Build:</b> ${env.BUILD_NUMBER}</p>
+                    <p><strong>Build:</strong> #${env.BUILD_NUMBER}</p>
+                    <h2>❌ Failure Summary</h2>
+                    <div class="failures">${failureSummary}</div>
                 </body>
                 </html>
                 """
             }
 
+            // ✅ Archive all reports for download
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
-            // ✅ Individual browser reports
+            // ✅ Publish individual browser reports
             publishHTML([
                 reportName: 'Chrome Report',
                 reportDir: 'reports/chrome',
@@ -111,7 +136,7 @@ pipeline {
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
 
-            // ✅ Combined dashboard that links to both
+            // ✅ Publish custom cumulative dashboard
             publishHTML([
                 reportName: 'Cumulative Dashboard',
                 reportDir: 'reports',
@@ -119,7 +144,7 @@ pipeline {
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
 
-            // 🧹 Stop Docker Grid
+            // 🧹 Stop Selenium Grid
             script {
                 echo "🧹 Stopping Docker Selenium Grid..."
                 bat 'docker-compose -f docker-compose-grid.yml down || echo "⚠️ Grid already stopped or not found."'
