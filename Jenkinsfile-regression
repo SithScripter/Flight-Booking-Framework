@@ -43,39 +43,32 @@ pipeline {
             }
         }
 
-        stage('Run Parallel Regression Tests') {
-            failFast false
-            parallel {
-                stage('Test on Chrome') {
-                    steps {
-                        echo '🧪 Running regression tests on Chrome...'
-                        bat """
-                            mvn clean test ^
-                            -P regression ^
-                            -Denv=PRODUCTION ^
-                            -Dtest.suite=regression ^
-                            -Dbrowser=CHROME ^
-                            -Dreport.dir=chrome ^
-                            -Dbrowser.headless=true
-                        """
-                    }
-                }
-                stage('Test on Firefox') {
-                    steps {
-                        echo '🧪 Running regression tests on Firefox...'
-                        bat """
-                            mvn clean test ^
-                            -P regression ^
-                            -Denv=PRODUCTION ^
-                            -Dtest.suite=regression ^
-                            -Dbrowser=FIREFOX ^
-                            -Dreport.dir=firefox ^
-                            -Dbrowser.headless=true
-                        """
-                    }
-                }
-            }
-        }
+stage('Regression - Chrome') {
+    steps {
+        bat """
+            mvn clean test ^
+            -P regression ^
+            -Denv=PRODUCTION ^
+            -Dtest.suite=regression ^
+            -Dbrowser=CHROME ^
+            -Dreport.dir=chrome ^
+            -Dbrowser.headless=true
+        """
+    }
+}
+stage('Regression - Firefox') {
+    steps {
+        bat """
+            mvn clean test ^
+            -P regression ^
+            -Denv=PRODUCTION ^
+            -Dtest.suite=regression ^
+            -Dbrowser=FIREFOX ^
+            -Dreport.dir=firefox ^
+            -Dbrowser.headless=true
+        """
+    }
+}
     }
 
     post {
