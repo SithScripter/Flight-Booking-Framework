@@ -1,6 +1,15 @@
 pipeline {
     agent any
 
+    parameters {
+        // ✅ Optional toggle for manual intervention before running tests
+        booleanParam(
+            name: 'MANUAL_APPROVAL',
+            defaultValue: false,
+            description: 'Enable this to pause the pipeline and require manual approval before running regression.'
+        )
+    }
+
     tools {
         maven 'apache-maven-3.9.9'
         jdk 'JDK 21'
@@ -38,43 +47,65 @@ pipeline {
         stage('Start Selenium Grid (Docker)') {
             steps {
                 echo "🔄 Starting Dockerized Selenium Grid..."
-                bat 'docker-compose -f docker-compose-grid.yml up -d'
-                bat 'ping -n 20 127.0.0.1 > NUL'
+                retry(2) { // ✅ Retry once in case Docker fails transiently
+                    bat 'docker-compose -f docker-compose-grid.yml up -d'
+                    bat 'ping -n 20 127.0.0.1 > NUL'
+                }
+            }
+        }
+
+        stage('Approval (Optional)') {
+            when {
+                expression { return params.MANUAL_APPROVAL == true }
+            }
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    input message: '🛑 Proceed with Regression Execution?', ok: 'Yes, Run Now'
+                }
             }
         }
 
         stage('Run Parallel Regression Tests') {
             failFast false
-            parallel {
-                stage('Test on Chrome') {
-                    steps {
-                        echo '🧪 Running regression tests on Chrome...'
-                        bat """
-                            mvn clean test ^
-                            -P regression ^
-                            -Denv=PRODUCTION ^
-                            -Dtest.suite=regression ^
-                            -Dbrowser=CHROME ^
-                            -Dreport.dir=chrome ^
-                            -Dbrowser.headless=true ^
-                            -Dmaven.repo.local=.m2-chrome
-                        """
+            steps {
+                timeout(time: 2, unit: 'HOURS') {
+                    retry(2) { // ✅ Retry setup logic before actual parallel stages
+                        echo '🔁 Pre-check before running parallel tests...'
+                        bat 'echo Simulating setup check...'
                     }
-                }
 
-                stage('Test on Firefox') {
-                    steps {
-                        echo '🧪 Running regression tests on Firefox...'
-                        bat """
-                            mvn clean test ^
-                            -P regression ^
-                            -Denv=PRODUCTION ^
-                            -Dtest.suite=regression ^
-                            -Dbrowser=FIREFOX ^
-                            -Dreport.dir=firefox ^
-                            -Dbrowser.headless=true ^
-                            -Dmaven.repo.local=.m2-firefox
-                        """
+                    parallel {
+                        stage('Test on Chrome') {
+                            steps {
+                                echo '🧪 Running regression tests on Chrome...'
+                                bat """
+                                    mvn clean test ^
+                                    -P regression ^
+                                    -Denv=PRODUCTION ^
+                                    -Dtest.suite=regression ^
+                                    -Dbrowser=CHROME ^
+                                    -Dreport.dir=chrome ^
+                                    -Dbrowser.headless=true ^
+                                    -Dmaven.repo.local=.m2-chrome
+                                """
+                            }
+                        }
+
+                        stage('Test on Firefox') {
+                            steps {
+                                echo '🧪 Running regression tests on Firefox...'
+                                bat """
+                                    mvn clean test ^
+                                    -P regression ^
+                                    -Denv=PRODUCTION ^
+                                    -Dtest.suite=regression ^
+                                    -Dbrowser=FIREFOX ^
+                                    -Dreport.dir=firefox ^
+                                    -Dbrowser.headless=true ^
+                                    -Dmaven.repo.local=.m2-firefox
+                                """
+                            }
+                        }
                     }
                 }
             }
@@ -85,60 +116,60 @@ pipeline {
         always {
             echo '📦 Archiving reports and publishing HTML dashboards...'
 
-            // ✅ Generate simple cumulative dashboard that links to both reports
-script {
-    def suiteName = "regression"
-    def summaryFile = "reports/${suiteName}-failure-summary.txt"
-    def hasFailures = fileExists(summaryFile) && readFile(summaryFile).trim().toLowerCase().contains("failed")
+            // ✅ Generate dashboard with test summary
+            script {
+                def suiteName = "regression"
+                def summaryFile = "reports/${suiteName}-failure-summary.txt"
+                def hasFailures = fileExists(summaryFile) && readFile(summaryFile).trim().toLowerCase().contains("failed")
 
-    def failureSummary = hasFailures ? readFile(summaryFile).trim() : "✅ All tests passed."
-    def failureHeader = hasFailures ? "❌ Failure Summary" : "✅ Test Result Summary"
-    def failureBoxColor = hasFailures ? "#fff3f3" : "#f3fff3"
-    def failureBorderColor = hasFailures ? "#f44336" : "#4CAF50"
-    def failureTextColor = hasFailures ? "#c62828" : "#2e7d32"
+                def failureSummary = hasFailures ? readFile(summaryFile).trim() : "✅ All tests passed."
+                def failureHeader = hasFailures ? "❌ Failure Summary" : "✅ Test Result Summary"
+                def failureBoxColor = hasFailures ? "#fff3f3" : "#f3fff3"
+                def failureBorderColor = hasFailures ? "#f44336" : "#4CAF50"
+                def failureTextColor = hasFailures ? "#c62828" : "#2e7d32"
 
-    writeFile file: 'reports/index.html', text: """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Regression Test Dashboard</title>
-        <style>
-            body { font-family: Arial; padding: 20px; background-color: #f7f7f7; }
-            h1 { color: #222; }
-            ul { list-style-type: none; padding-left: 0; }
-            li { margin: 10px 0; }
-            a { color: #1976D2; font-size: 16px; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-            .summary-box {
-                background-color: ${failureBoxColor};
-                border-left: 6px solid ${failureBorderColor};
-                padding: 10px;
-                margin-top: 20px;
-                white-space: pre-line;
-                font-family: monospace;
-                color: ${failureTextColor};
+                writeFile file: 'reports/index.html', text: """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Regression Test Dashboard</title>
+                    <style>
+                        body { font-family: Arial; padding: 20px; background-color: #f7f7f7; }
+                        h1 { color: #222; }
+                        ul { list-style-type: none; padding-left: 0; }
+                        li { margin: 10px 0; }
+                        a { color: #1976D2; font-size: 16px; text-decoration: none; }
+                        a:hover { text-decoration: underline; }
+                        .summary-box {
+                            background-color: ${failureBoxColor};
+                            border-left: 6px solid ${failureBorderColor};
+                            padding: 10px;
+                            margin-top: 20px;
+                            white-space: pre-line;
+                            font-family: monospace;
+                            color: ${failureTextColor};
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>📊 Regression Test Dashboard</h1>
+                    <ul>
+                        <li>🧪 <a href="chrome/index.html" target="_blank">Chrome Report</a></li>
+                        <li>🧪 <a href="firefox/index.html" target="_blank">Firefox Report</a></li>
+                    </ul>
+                    <p><strong>Build:</strong> #${env.BUILD_NUMBER}</p>
+                    <h2>${failureHeader}</h2>
+                    <div class="summary-box">${failureSummary}</div>
+                </body>
+                </html>
+                """
             }
-        </style>
-    </head>
-    <body>
-        <h1>📊 Regression Test Dashboard</h1>
-        <ul>
-            <li>🧪 <a href="chrome/index.html" target="_blank">Chrome Report</a></li>
-            <li>🧪 <a href="firefox/index.html" target="_blank">Firefox Report</a></li>
-        </ul>
-        <p><strong>Build:</strong> #${env.BUILD_NUMBER}</p>
-        <h2>${failureHeader}</h2>
-        <div class="summary-box">${failureSummary}</div>
-    </body>
-    </html>
-    """
-}
-			
-			// ✅ Archive all reports and logs for download
-			archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
-			archiveArtifacts artifacts: 'logs/**', allowEmptyArchive: true
 
-            // ✅ Publish individual browser reports
+            // ✅ Archive test results and logs
+            archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'logs/**', allowEmptyArchive: true
+
+            // ✅ Publish HTML reports for each browser
             publishHTML([
                 reportName: 'Chrome Report',
                 reportDir: 'reports/chrome',
@@ -151,8 +182,6 @@ script {
                 reportFiles: 'index.html',
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
-
-            // ✅ Publish custom cumulative dashboard
             publishHTML([
                 reportName: 'Cumulative Dashboard',
                 reportDir: 'reports',
@@ -160,16 +189,15 @@ script {
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
 
-            // 🧹 Stop Selenium Grid
+            // 🧹 Tear down Selenium Grid
             script {
                 echo "🧹 Stopping Docker Selenium Grid..."
                 bat 'docker-compose -f docker-compose-grid.yml down || echo "⚠️ Grid already stopped or not found."'
 
-                // ✅ Qase.io Integration
+                // ✅ Qase Integration
                 try {
                     echo '--- Starting Qase.io Integration ---'
                     def runId
-
                     withCredentials([string(credentialsId: 'qase-api-token', variable: 'QASE_TOKEN')]) {
                         echo '1. Creating a new Test Run...'
                         bat """
@@ -181,11 +209,9 @@ script {
                             -o response.json
                         """
                         def responseJson = readJSON file: 'response.json'
-
                         if (responseJson.status) {
                             runId = responseJson.result.id
                             echo "✅ Qase Test Run ID: ${runId}"
-
                             echo "2. Uploading results to Qase..."
                             bat """
                                 curl -s -X PATCH "https://api.qase.io/v1/result/FB/${runId}/testng" ^
@@ -194,7 +220,6 @@ script {
                                 -H "Token: %QASE_TOKEN%" ^
                                 -F "file=@target/surefire-reports/testng-results.xml"
                             """
-
                             echo "3. Marking Qase run as complete..."
                             bat """
                                 curl -s -X POST "https://api.qase.io/v1/run/FB/${runId}/complete" ^
@@ -210,15 +235,13 @@ script {
                     echo "⚠️ Exception in Qase integration: ${err.getMessage()}"
                 }
 
-                // ✅ Email Notification
+                // ✅ Email Notifications
                 def suiteName = "regression"
                 def summaryFile = "reports/${suiteName}-failure-summary.txt"
                 def failureSummary = fileExists(summaryFile) ? readFile(summaryFile).trim() : ""
                 def reportURL = "${env.BUILD_URL}Cumulative-Dashboard/"
 
-                def emailSubject
-                def emailBody
-
+                def emailSubject, emailBody
                 if (currentBuild.currentResult == 'SUCCESS') {
                     emailSubject = "✅ SUCCESS: Nightly Regression Build #${env.BUILD_NUMBER} for ${env.JOB_NAME}"
                     emailBody = """
