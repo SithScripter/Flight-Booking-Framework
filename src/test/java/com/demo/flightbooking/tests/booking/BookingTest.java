@@ -63,7 +63,7 @@ public class BookingTest extends BaseTest {
         Assert.assertTrue(urlContainsPurchase, "Did not navigate to purchase page!");
         
         // --- ADD THIS LINE TO FORCE A FAILURE ---
-//        Assert.assertTrue(false, "Intentionally failing test to check email notification.");
+        Assert.assertTrue(false, "Intentionally failing test to check email notification.");
 
         PurchasePage purchasePage = new PurchasePage(driver);
         purchasePage.fillPurchaseForm(passenger);
