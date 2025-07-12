@@ -42,7 +42,11 @@ pipeline {
             }
         }
 
+        // ✅ This stage runs ONLY on the 'enhancements' branch to avoid resource conflict from other branches
         stage('Start Selenium Grid (Docker)') {
+            when {
+                branch 'enhancements'
+            }
             steps {
                 script {
                     // ✅ Retry logic for flaky grid start failures
@@ -55,10 +59,13 @@ pipeline {
             }
         }
 
-        // ✅ Optional Manual Gate before executing tests
+        // ✅ Manual approval gate is conditionally triggered based on user toggle
         stage('Approval (Optional)') {
             when {
-                expression { return params.MANUAL_APPROVAL }
+                allOf {
+                    branch 'enhancements'
+                    expression { return params.MANUAL_APPROVAL }
+                }
             }
             steps {
                 timeout(time: 30, unit: 'MINUTES') {
@@ -67,9 +74,11 @@ pipeline {
             }
         }
 
-        // ✅ Parallel Test Stage (MUST be directly under stage -> parallel -> branches)
+        // ✅ Test execution runs ONLY on 'enhancements' branch
         stage('Run Parallel Regression Tests') {
-            // Wrap the parallel block in a timeout to prevent hanging
+            when {
+                branch 'enhancements'
+            }
             steps {
                 timeout(time: 2, unit: 'HOURS') {
                     script {
@@ -159,27 +168,30 @@ pipeline {
                 </html>
                 """
             }
-			
-			// ✅ Archive and publish reports using shared function
-			archiveAndPublishReports()
 
-            // 🧹 Tear down Selenium Grid
+            // ✅ Archive and publish reports using shared function
+            archiveAndPublishReports()
+
+            // ✅ Only cleanup, Qase, and email on 'enhancements' branch
             script {
-                echo "🧹 Stopping Docker Selenium Grid..."
-                stopDockerGrid()
+                echo "🧹 Checking if this is enhancements branch for post-build steps..."
+                if (env.BRANCH_NAME == 'enhancements') {
+                    echo "🧹 Stopping Docker Selenium Grid..."
+                    stopDockerGrid()
 
-                // ✅ Qase Integration
-				updateQase(
-					projectCode: 'FB',
-					credentialsId: 'qase-api-token',
-					testCaseIds: '[1, 2]'
-				)
+                    updateQase(
+                        projectCode: 'FB',
+                        credentialsId: 'qase-api-token',
+                        testCaseIds: '[1, 2]'
+                    )
 
-                // ✅ Email Notifications
-				sendBuildSummaryEmail(
-					suiteName: 'regression',
-					emailCredsId: 'recipient-email-list'
-				)
+                    sendBuildSummaryEmail(
+                        suiteName: 'regression',
+                        emailCredsId: 'recipient-email-list'
+                    )
+                } else {
+                    echo "ℹ️ Skipping teardown and reporting steps for branch: ${env.BRANCH_NAME}"
+                }
             }
         }
 
