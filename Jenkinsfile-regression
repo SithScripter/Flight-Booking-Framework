@@ -8,7 +8,7 @@ pipeline {
     }
 
     parameters {
-        // ✅ Toggle switch to enable/disable manual approval gate
+        // ✅ Toggle switch to enable/disable the manual approval gate
         booleanParam(name: 'MANUAL_APPROVAL', defaultValue: false, description: 'Enable this to pause the pipeline and require manual approval before running regression.')
     }
 
