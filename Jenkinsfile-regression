@@ -43,37 +43,57 @@ pipeline {
             }
         }
 
-stage('Regression - Chrome') {
-    steps {
-        bat """
-            mvn clean test ^
-            -P regression ^
-            -Denv=PRODUCTION ^
-            -Dtest.suite=regression ^
-            -Dbrowser=CHROME ^
-            -Dreport.dir=chrome ^
-            -Dbrowser.headless=true
-        """
-    }
-}
-stage('Regression - Firefox') {
-    steps {
-        bat """
-            mvn clean test ^
-            -P regression ^
-            -Denv=PRODUCTION ^
-            -Dtest.suite=regression ^
-            -Dbrowser=FIREFOX ^
-            -Dreport.dir=firefox ^
-            -Dbrowser.headless=true
-        """
-    }
-}
+        stage('Regression - Chrome') {
+            steps {
+                bat """
+                    mvn clean test ^
+                    -P regression ^
+                    -Denv=PRODUCTION ^
+                    -Dtest.suite=regression ^
+                    -Dbrowser=CHROME ^
+                    -Dreport.dir=chrome ^
+                    -Dbrowser.headless=true
+                """
+            }
+        }
+
+        stage('Regression - Firefox') {
+            steps {
+                bat """
+                    mvn clean test ^
+                    -P regression ^
+                    -Denv=PRODUCTION ^
+                    -Dtest.suite=regression ^
+                    -Dbrowser=FIREFOX ^
+                    -Dreport.dir=firefox ^
+                    -Dbrowser.headless=true
+                """
+            }
+        }
     }
 
     post {
         always {
             echo '📦 Archiving reports and publishing HTML dashboards...'
+
+            // ✅ Dynamically generate a simple HTML dashboard with links to Chrome & Firefox reports
+            // This replaces the blank cumulative dashboard
+            script {
+                writeFile file: 'reports/index.html', text: """
+                <!DOCTYPE html>
+                <html>
+                <head><title>Regression Test Dashboard</title></head>
+                <body style="font-family:Arial; padding:20px;">
+                    <h1>📊 Regression Test Dashboard</h1>
+                    <ul>
+                        <li><a href="chrome/index.html" target="_blank">🧪 Chrome Report</a></li>
+                        <li><a href="firefox/index.html" target="_blank">🧪 Firefox Report</a></li>
+                    </ul>
+                    <p><b>Build:</b> ${env.BUILD_NUMBER}</p>
+                </body>
+                </html>
+                """
+            }
 
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
 
@@ -91,7 +111,7 @@ stage('Regression - Firefox') {
                 keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
             ])
 
-            // ✅ Optional Cumulative Dashboard (from one of the reports)
+            // ✅ Combined dashboard that links to both
             publishHTML([
                 reportName: 'Cumulative Dashboard',
                 reportDir: 'reports',
