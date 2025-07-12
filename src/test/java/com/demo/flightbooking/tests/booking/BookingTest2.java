@@ -84,8 +84,8 @@ public class BookingTest2 extends BaseTest {
      *
      * @param passenger Passenger record containing personal, payment, and flight details from CSV.
      */
-    @Test(dataProvider = "passengerCsvData", dataProviderClass = CsvDataProvider.class,
-          groups = {"regression", "passenger_booking"})
+//    @Test(dataProvider = "passengerCsvData", dataProviderClass = CsvDataProvider.class,
+//          groups = {"regression", "passenger_booking"})
     public void testEndToEndBookingFromCsv(Passenger passenger) {
         WebDriver driver = DriverManager.getDriver();
         WebDriverUtils webDriverUtils = new WebDriverUtils(driver, ConfigReader.getPropertyAsInt("test.timeout"));

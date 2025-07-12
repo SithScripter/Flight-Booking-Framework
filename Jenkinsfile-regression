@@ -118,9 +118,10 @@ pipeline {
                 </html>
                 """
             }
-
-            // ✅ Archive all reports for download
-            archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+			
+			// ✅ Archive all reports and logs for download
+			archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+			archiveArtifacts artifacts: 'logs/**', allowEmptyArchive: true
 
             // ✅ Publish individual browser reports
             publishHTML([

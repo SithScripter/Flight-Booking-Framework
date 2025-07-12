@@ -49,6 +49,12 @@ public class BaseTest {
             logsDir.mkdirs();
         }
         logger.info("✅ Logs directory ensured.");
+        
+        File oldSummary = new File("reports/regression-failure-summary.txt");
+        if (oldSummary.exists()) {
+            oldSummary.delete();
+            logger.info("🧹 Old failure summary deleted.");
+        }
     }
 
     /**
