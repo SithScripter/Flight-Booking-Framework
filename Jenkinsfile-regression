@@ -1,21 +1,18 @@
 pipeline {
     agent any
 
-    parameters {
-        // ✅ Optional toggle for manual intervention before running tests
-        booleanParam(
-            name: 'MANUAL_APPROVAL',
-            defaultValue: false,
-            description: 'Enable this to pause the pipeline and require manual approval before running regression.'
-        )
-    }
-
     tools {
         maven 'apache-maven-3.9.9'
         jdk 'JDK 21'
     }
 
+    parameters {
+        // ✅ Toggle switch to enable/disable manual approval gate
+        booleanParam(name: 'MANUAL_APPROVAL', defaultValue: false, description: 'Enable this to pause the pipeline and require manual approval before running regression.')
+    }
+
     stages {
+
         stage('Log Build Info') {
             steps {
                 echo "================================================="
@@ -46,37 +43,37 @@ pipeline {
 
         stage('Start Selenium Grid (Docker)') {
             steps {
-                echo "🔄 Starting Dockerized Selenium Grid..."
-                retry(2) { // ✅ Retry once in case Docker fails transiently
-                    bat 'docker-compose -f docker-compose-grid.yml up -d'
-                    bat 'ping -n 20 127.0.0.1 > NUL'
+                script {
+                    // ✅ Retry logic for flaky grid start failures
+                    retry(2) {
+                        echo "🟡 Attempting to start Docker Grid..."
+                        bat 'docker-compose -f docker-compose-grid.yml up -d'
+                        bat 'ping -n 20 127.0.0.1 > NUL' // Windows wait
+                    }
                 }
             }
         }
 
+        // ✅ Optional Manual Gate before executing tests
         stage('Approval (Optional)') {
             when {
-                expression { return params.MANUAL_APPROVAL == true }
+                expression { return params.MANUAL_APPROVAL }
             }
             steps {
                 timeout(time: 30, unit: 'MINUTES') {
-                    input message: '🛑 Proceed with Regression Execution?', ok: 'Yes, Run Now'
+                    input message: '🛑 Proceed with Regression Execution?'
                 }
             }
         }
 
+        // ✅ Parallel Test Stage (MUST be directly under stage -> parallel -> branches)
         stage('Run Parallel Regression Tests') {
-            failFast false
+            // Wrap the parallel block in a timeout to prevent hanging
             steps {
                 timeout(time: 2, unit: 'HOURS') {
-                    retry(2) { // ✅ Retry setup logic before actual parallel stages
-                        echo '🔁 Pre-check before running parallel tests...'
-                        bat 'echo Simulating setup check...'
-                    }
-
-                    parallel {
-                        stage('Test on Chrome') {
-                            steps {
+                    script {
+                        parallel(
+                            Chrome: {
                                 echo '🧪 Running regression tests on Chrome...'
                                 bat """
                                     mvn clean test ^
@@ -88,11 +85,8 @@ pipeline {
                                     -Dbrowser.headless=true ^
                                     -Dmaven.repo.local=.m2-chrome
                                 """
-                            }
-                        }
-
-                        stage('Test on Firefox') {
-                            steps {
+                            },
+                            Firefox: {
                                 echo '🧪 Running regression tests on Firefox...'
                                 bat """
                                     mvn clean test ^
@@ -105,7 +99,7 @@ pipeline {
                                     -Dmaven.repo.local=.m2-firefox
                                 """
                             }
-                        }
+                        )
                     }
                 }
             }
