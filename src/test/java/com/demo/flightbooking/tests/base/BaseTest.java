@@ -1,6 +1,7 @@
 package com.demo.flightbooking.tests.base;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
@@ -158,17 +159,21 @@ public class BaseTest {
         String suiteName = System.getProperty("test.suite", "default");
         String reportPath = "reports/" + reportDir + "/";
         String reportFileName = suiteName + "-" + reportDir + "-report.html";
-        String summaryFileName = suiteName + "-" + reportDir + "-failure-summary.txt";
+        String mergedSummaryFile = "reports/regression-failure-summary.txt";
 
         if (!failureSummaries.isEmpty()) {
-            try (PrintWriter out = new PrintWriter(reportPath + summaryFileName)) {
-                out.println("===== FAILED TEST SUMMARY =====");
-                failureSummaries.forEach(out::println);
-                logger.info("📄 Failure summary written: {}", summaryFileName);
+            try {
+                File file = new File(mergedSummaryFile);
+                file.getParentFile().mkdirs(); // Ensure reports/ exists
+                try (PrintWriter out = new PrintWriter(new FileWriter(file, true))) { // append mode
+                    failureSummaries.forEach(out::println);
+                    logger.info("📄 Failure summary appended to merged file: {}", mergedSummaryFile);
+                }
             } catch (IOException e) {
-                logger.error("❌ Failed to write failure summary", e);
+                logger.error("❌ Failed to write to merged failure summary", e);
             }
         }
+
 
         // Copy the report to index.html if Jenkins expects it
         try {
