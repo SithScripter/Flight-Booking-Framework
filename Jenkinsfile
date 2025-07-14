@@ -1,14 +1,21 @@
+// At the very top of the file, we import the Shared Library configured in Jenkins.
 @Library('my-automation-library') _
 
+// This pipeline now focuses on "what" to do, not "how" to do it.
 pipeline {
     agent {
         dockerfile {
-            dir '.' // Uses Dockerfile from the root of your project
+            filename 'Dockerfile' // This assumes the Dockerfile is in your repo root
         }
     }
 
     parameters {
         choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select environment')
+    }
+
+    tools {
+        maven 'apache-maven-3.9.9'
+        jdk 'JDK 21'
     }
 
     stages {
@@ -41,19 +48,19 @@ pipeline {
         stage('Start Selenium Grid (Docker)') {
             steps {
                 echo '📦 Starting Docker-based Selenium Grid...'
-                bat 'docker-compose -f docker-compose-grid.yml up -d'
-                bat 'ping -n 20 127.0.0.1 > NUL'
+                sh 'docker-compose -f docker-compose-grid.yml up -d'
+                sh 'sleep 20'
             }
         }
 
         stage('Build & Run Smoke Tests') {
             steps {
                 echo "🧪 Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
-                bat """
-                    mvn clean test ^
-                    -P smoke ^
-                    -Denv=${params.TARGET_ENVIRONMENT} ^
-                    -Dtest.suite=smoke ^
+                sh """
+                    mvn clean test \\
+                    -P smoke \\
+                    -Denv=${params.TARGET_ENVIRONMENT} \\
+                    -Dtest.suite=smoke \\
                     -Dbrowser.headless=true
                 """
             }
@@ -62,7 +69,7 @@ pipeline {
         stage('Stop Selenium Grid') {
             steps {
                 echo '🛑 Stopping Docker-based Selenium Grid...'
-                bat 'docker-compose -f docker-compose-grid.yml down'
+                sh 'docker-compose -f docker-compose-grid.yml down'
             }
         }
     }
@@ -94,10 +101,10 @@ pipeline {
             echo '⚠️ Build failed. Attempting to clean up...'
             script {
                 try {
-                    def result = bat(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
+                    def result = sh(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
                     if (result) {
                         echo "🛑 Stopping containers:\n${result}"
-                        bat 'docker-compose -f docker-compose-grid.yml down || echo "Grid already stopped"'
+                        sh 'docker-compose -f docker-compose-grid.yml down || echo "Grid already stopped"'
                     } else {
                         echo "✅ No active Selenium containers to stop."
                     }
