@@ -13,10 +13,10 @@ pipeline {
         choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select environment')
     }
 
-    tools {
-        maven 'apache-maven-3.9.9'
-        jdk 'JDK 21'
-    }
+//    tools {
+//        maven 'apache-maven-3.9.9'
+//        jdk 'JDK 21'
+//    }
 
     stages {
         stage('Log Build Info') {
