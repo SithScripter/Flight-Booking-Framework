@@ -3,13 +3,8 @@
 pipeline {
     agent {
         dockerfile {
-            dir '.' // Look for Dockerfile in project root
+            dir '.' // Uses Dockerfile from the root of your project
         }
-    }
-
-    options {
-        // ✅ Fix path issues on Windows when running Linux containers
-        customWorkspace('/home/jenkins/agent/workspace/smoke-job')
     }
 
     parameters {
@@ -20,7 +15,7 @@ pipeline {
         stage('Log Build Info') {
             steps {
                 echo "================================================="
-                echo "      BUILD & TEST METADATA (SMOKE - DOCKER)"
+                echo "         BUILD & TEST METADATA (SMOKE)"
                 echo "================================================="
                 echo "Job: ${env.JOB_NAME}"
                 echo "Build Number: ${env.BUILD_NUMBER}"
@@ -47,7 +42,6 @@ pipeline {
             steps {
                 echo '📦 Starting Docker-based Selenium Grid...'
                 bat 'docker-compose -f docker-compose-grid.yml up -d'
-                // Wait for Grid to be ready
                 bat 'ping -n 20 127.0.0.1 > NUL'
             }
         }
@@ -55,7 +49,13 @@ pipeline {
         stage('Build & Run Smoke Tests') {
             steps {
                 echo "🧪 Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
-                bat "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke -Dbrowser.headless=true"
+                bat """
+                    mvn clean test ^
+                    -P smoke ^
+                    -Denv=${params.TARGET_ENVIRONMENT} ^
+                    -Dtest.suite=smoke ^
+                    -Dbrowser.headless=true
+                """
             }
         }
 
@@ -70,38 +70,34 @@ pipeline {
     post {
         always {
             echo '📦 Archiving and publishing reports...'
-
-            // ✅ Archive and publish using shared library
             archiveAndPublishReports()
 
             script {
                 try {
-                    // ✅ Qase.io Integration
                     updateQase(
                         projectCode: 'FB',
                         credentialsId: 'qase-api-token',
                         testCaseIds: '[2]'
                     )
 
-                    // ✅ Email Notification
                     sendBuildSummaryEmail(
                         suiteName: 'smoke',
                         emailCredsId: 'recipient-email-list'
                     )
                 } catch (err) {
-                    echo "⚠️ Post-build step failed: ${err.getMessage()}"
+                    echo "⚠️ Post-build actions failed: ${err.getMessage()}"
                 }
             }
         }
 
         failure {
-            echo '⚠️ Build failed. Attempting to clean up Docker Grid...'
+            echo '⚠️ Build failed. Attempting to clean up...'
             script {
                 try {
                     def result = bat(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
                     if (result) {
                         echo "🛑 Stopping containers:\n${result}"
-                        bat 'docker-compose -f docker-compose-grid.yml down'
+                        bat 'docker-compose -f docker-compose-grid.yml down || echo "Grid already stopped"'
                     } else {
                         echo "✅ No active Selenium containers to stop."
                     }
