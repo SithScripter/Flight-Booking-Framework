@@ -1,36 +1,49 @@
 @Library('my-automation-library') _
 
 pipeline {
-    agent {
-        dockerfile {
-            filename 'Dockerfile'
-        }
-    }
+    agent any
 
     parameters {
         choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select environment')
     }
 
-    // Removed tools block: handled by Docker image
-
-    options {
-        skipDefaultCheckout(true)
-    }
-
     stages {
-        stage('Start Selenium Grid (on host)') {
-            agent any
+        stage('Log Build Info') {
             steps {
-                echo '📦 Starting Docker-based Selenium Grid on host...'
+                echo "================================================="
+                echo "         BUILD & TEST METADATA (SMOKE)"
+                echo "================================================="
+                echo "Job: ${env.JOB_NAME}"
+                echo "Build Number: ${env.BUILD_NUMBER}"
+                echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
+                echo "Branch: ${env.BRANCH_NAME}"
+                echo "Commit: ${env.GIT_COMMIT}"
+                echo "================================================="
+            }
+        }
+
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Checkout SCM') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Start Selenium Grid (Docker)') {
+            steps {
+                echo '📦 Starting Docker-based Selenium Grid...'
                 sh 'docker-compose -f docker-compose-grid.yml up -d'
                 sh 'sleep 20'
             }
         }
 
-        stage('Run Smoke Tests (in Docker Agent)') {
+        stage('Build & Run Smoke Tests') {
             steps {
-                checkout scm
-
                 echo "🧪 Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
                 sh """
                     mvn clean test \\
@@ -42,10 +55,9 @@ pipeline {
             }
         }
 
-        stage('Stop Selenium Grid (on host)') {
-            agent any
+        stage('Stop Selenium Grid') {
             steps {
-                echo '🛑 Stopping Docker-based Selenium Grid on host...'
+                echo '🛑 Stopping Docker-based Selenium Grid...'
                 sh 'docker-compose -f docker-compose-grid.yml down'
             }
         }
@@ -75,7 +87,7 @@ pipeline {
         }
 
         failure {
-            echo '⚠️ Build failed. Attempting to clean up grid...'
+            echo '⚠️ Build failed. Attempting to clean up...'
             script {
                 try {
                     def result = sh(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
