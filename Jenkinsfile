@@ -4,7 +4,8 @@ pipeline {
     agent {
         docker {
             image 'docker/compose:latest'
-            args '-u root -v /var/run/docker.sock:/var/run/docker.sock'
+            // Add --entrypoint='' to the args to fix the agent startup issue
+            args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
         }
     }
 
@@ -58,22 +59,22 @@ pipeline {
             echo '📦 Archiving and publishing reports...'
             archiveAndPublishReports()
 
-            script {
-                try {
-                    updateQase(
-                        projectCode: 'FB',
-                        credentialsId: 'qase-api-token',
-                        testCaseIds: '[2]'
-                    )
-
-                    sendBuildSummaryEmail(
-                        suiteName: 'smoke',
-                        emailCredsId: 'recipient-email-list'
-                    )
-                } catch (err) {
-                    echo "⚠️ Post-build actions failed: ${err.getMessage()}"
-                }
-            }
+//            script {
+//                try {
+//                    updateQase(
+//                        projectCode: 'FB',
+//                        credentialsId: 'qase-api-token',
+//                        testCaseIds: '[2]'
+//                    )
+//
+//                    sendBuildSummaryEmail(
+//                        suiteName: 'smoke',
+//                        emailCredsId: 'recipient-email-list'
+//                    )
+//                } catch (err) {
+//                    echo "⚠️ Post-build actions failed: ${err.getMessage()}"
+//                }
+//            }
         }
 
         failure {
