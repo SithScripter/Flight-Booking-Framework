@@ -21,8 +21,8 @@ pipeline {
                 }
             }
             steps {
-				checkout scm
                 cleanWs()
+				checkout scm
                 echo "================================================="
                 echo "         BUILD & TEST METADATA"
                 echo "================================================="
