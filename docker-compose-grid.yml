@@ -9,10 +9,14 @@ services:
     container_name: selenium-hub
     ports:
       - "4444:4444"
+    networks: # Assign this service to the 'grid' network
+      - grid
     environment:
       - GRID_TIMEOUT=60             # Hub waits 60s before timing out a session
       - GRID_CLEAN_UP_CYCLE=60      # Cleans up stale sessions every 60s
-
+    networks: # Assign this service to the 'grid' network
+      - grid
+    
   # 🧭 Chrome Node – capable of handling up to 2 parallel sessions
   chrome:
     image: selenium/node-chromium:4.27
@@ -25,6 +29,8 @@ services:
       - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
       - SE_NODE_OVERRIDE_MAX_SESSIONS=true  # Allows overriding default
       - SE_NODE_MAX_SESSIONS=1              # Run 2 Chrome tests in parallel
+    networks: # Assign this service to the 'grid' network
+      - grid
 
   # 🦊 Firefox Node – capable of handling up to 2 parallel sessions
   firefox:
@@ -38,3 +44,10 @@ services:
       - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
       - SE_NODE_OVERRIDE_MAX_SESSIONS=true
       - SE_NODE_MAX_SESSIONS=1
+    networks: # Assign this service to the 'grid' network
+      - grid
+      
+# Define the shared network at the bottom of the file
+networks:
+  grid:
+    name: selenium_grid_network

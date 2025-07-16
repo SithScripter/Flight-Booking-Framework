@@ -1,13 +1,13 @@
 @Library('my-automation-library') _
 
 pipeline {
-    agent {
-        docker {
-            image 'flight-booking-agent:latest'
-            // Add --entrypoint='' to the args to fix the agent startup issue
-            args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
-        }
-    }
+	agent {
+		docker {
+			image 'flight-booking-agent:latest'
+			// Add the --network flag to join the Selenium Grid's network
+			args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint="" --network=selenium_grid_network'
+		}
+	}
 
     options {
         skipDefaultCheckout()
