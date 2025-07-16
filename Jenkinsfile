@@ -21,10 +21,10 @@ pipeline {
                 }
             }
             steps {
+				checkout scm
                 cleanWs()
-                checkout scm
                 echo "================================================="
-                echo "         BUILD & TEST METADATA (SMOKE)"
+                echo "         BUILD & TEST METADATA"
                 echo "================================================="
                 echo "Job: ${env.JOB_NAME}, Build: ${env.BUILD_NUMBER}, Branch: ${env.BRANCH_NAME}"
                 echo "================================================="
@@ -54,21 +54,17 @@ pipeline {
     post {
         // This block runs regardless of build success or failure
         always {
-            // We must define an agent here for the cleanup and reporting steps
-            agent {
-                docker {
-                    image 'docker/compose:latest'
-                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
-                }
-            }
-            steps {
-                echo '🛑 Stopping Docker-based Selenium Grid...'
-                sh 'docker compose -f docker-compose-grid.yml down || echo "Grid already stopped."'
-                
-//                echo '📦 Archiving and publishing reports...'
-//                archiveAndPublishReports()
-//
-//                script {
+            // Use a script block to access the docker.image().inside() step
+            script {
+                // This explicitly runs the enclosed code inside a temporary container
+                docker.image('docker/compose:latest').inside('-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""') {
+                    
+                    echo '🛑 Stopping Docker-based Selenium Grid...'
+                    sh 'docker compose -f docker-compose-grid.yml down || echo "Grid already stopped."'
+                    
+//                    echo '📦 Archiving and publishing reports...'
+//                    archiveAndPublishReports()
+
 //                    try {
 //                        updateQase(
 //                            projectCode: 'FB',
@@ -82,7 +78,7 @@ pipeline {
 //                    } catch (err) {
 //                        echo "⚠️ Post-build notification actions failed: ${err.getMessage()}"
 //                    }
-//                }
+                }
             }
         }
     }
