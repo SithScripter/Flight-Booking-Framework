@@ -1,7 +1,12 @@
 @Library('my-automation-library') _
 
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'docker/compose:latest'
+            args '-u root -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     parameters {
         choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select environment')
