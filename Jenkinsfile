@@ -8,9 +8,7 @@ pipeline {
         }
     }
 
-    // This options block is the key to the fix
     options {
-        // Prevents Jenkins from doing a checkout on the controller before the agent starts
         skipDefaultCheckout()
     }
 
@@ -19,53 +17,37 @@ pipeline {
     }
 
     stages {
-        // This stage must now be first to get the code into our agent
         stage('Checkout SCM') {
             steps {
-                // We manually check out the code now that we are in the correct agent
-                cleanWs() // Clean workspace before checkout
+                cleanWs()
                 checkout scm
             }
         }
 
         stage('Log Build Info') {
             steps {
-                echo "================================================="
-                echo "         BUILD & TEST METADATA (SMOKE)"
-                echo "================================================="
                 echo "Job: ${env.JOB_NAME}"
                 echo "Build Number: ${env.BUILD_NUMBER}"
-                echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
                 echo "Branch: ${env.BRANCH_NAME}"
                 echo "Commit: ${env.GIT_COMMIT}"
-                echo "================================================="
             }
         }
 
-        stage('Start Selenium Grid (Docker)') {
+        stage('Start Selenium Grid') {
             steps {
-                echo '📦 Starting Docker-based Selenium Grid...'
                 sh 'docker-compose -f docker-compose-grid.yml up -d'
                 sh 'sleep 20'
             }
         }
 
-        stage('Build & Run Smoke Tests') {
+        stage('Run Tests') {
             steps {
-                echo "🧪 Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
-                sh """
-                    mvn clean test \\
-                    -P smoke \\
-                    -Denv=${params.TARGET_ENVIRONMENT} \\
-                    -Dtest.suite=smoke \\
-                    -Dbrowser.headless=true
-                """
+                sh 'mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke -Dbrowser.headless=true'
             }
         }
 
         stage('Stop Selenium Grid') {
             steps {
-                echo '🛑 Stopping Docker-based Selenium Grid...'
                 sh 'docker-compose -f docker-compose-grid.yml down'
             }
         }
@@ -73,7 +55,6 @@ pipeline {
 
     post {
         always {
-            // The post actions will now run in the agent's context
             echo '📦 Archiving and publishing reports...'
             archiveAndPublishReports()
 
