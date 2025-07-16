@@ -5,7 +5,8 @@ pipeline {
 		docker {
 			image 'flight-booking-agent:latest'
 			// Add the --network flag to join the Selenium Grid's network
-			args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint="" --network=selenium_grid_network'
+			args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
+
 		}
 	}
 
@@ -93,7 +94,7 @@ pipeline {
                     def result = sh(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
                     if (result) {
                         echo "🛑 Stopping containers:\n${result}"
-                        sh 'docker-compose -f docker-compose-grid.yml down || echo "Grid already stopped"'
+                        sh 'docker compose -f docker-compose-grid.yml down || echo "Grid already stopped"'
                     } else {
                         echo "✅ No active Selenium containers to stop."
                     }
