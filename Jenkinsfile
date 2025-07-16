@@ -29,7 +29,7 @@ pipeline {
                 echo "Job: ${env.JOB_NAME}, Build: ${env.BUILD_NUMBER}, Branch: ${env.BRANCH_NAME}"
                 echo "================================================="
                 echo '📦 Starting Docker-based Selenium Grid...'
-                sh 'docker compose -f docker-compose-grid.yml up -d'
+                sh 'docker-compose -f docker-compose-grid.yml up -d'
                 sh 'sleep 20' // Give the grid a moment to stabilize
             }
         }
@@ -60,7 +60,7 @@ pipeline {
                 docker.image('docker/compose:latest').inside('-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""') {
                     
                     echo '🛑 Stopping Docker-based Selenium Grid...'
-                    sh 'docker compose -f docker-compose-grid.yml down || echo "Grid already stopped."'
+                    sh 'docker-compose -f docker-compose-grid.yml down || echo "Grid already stopped."'
                     
 //                    echo '📦 Archiving and publishing reports...'
 //                    archiveAndPublishReports()
