@@ -3,7 +3,7 @@
 pipeline {
     agent {
         docker {
-            image 'docker/compose:latest'
+            image 'flight-booking-agent:latest'
             // Add --entrypoint='' to the args to fix the agent startup issue
             args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
         }
