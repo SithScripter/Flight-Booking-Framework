@@ -45,6 +45,6 @@ services:
     networks:
       - grid
 
-  networks:
+networks:
   grid:
-    name: selenium_grid_network 
+    name: selenium_grid_network
