@@ -36,7 +36,7 @@ pipeline {
 
         stage('Start Selenium Grid') {
             steps {
-                sh 'docker-compose -f docker-compose-grid.yml up -d'
+                sh 'docker compose -f docker-compose-grid.yml up -d'
                 sh 'sleep 20'
             }
         }
@@ -58,7 +58,7 @@ pipeline {
 
         stage('Stop Selenium Grid') {
             steps {
-                sh 'docker-compose -f docker-compose-grid.yml down'
+                sh 'docker compose -f docker-compose-grid.yml down'
             }
         }
     }
