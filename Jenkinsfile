@@ -5,7 +5,7 @@ pipeline {
 		docker {
 			image 'flight-booking-agent:latest'
 			// Add the --network flag to join the Selenium Grid's network
-			args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
+			args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint="" --network=selenium_grid_network'
 
 		}
 	}
@@ -21,8 +21,8 @@ pipeline {
     stages {
         stage('Checkout SCM') {
             steps {
+				checkout scm
                 cleanWs()
-                checkout scm
             }
         }
 
@@ -37,6 +37,7 @@ pipeline {
 
         stage('Start Selenium Grid') {
             steps {
+				sh 'docker network inspect selenium_grid_network || docker network create selenium_grid_network'
                 sh 'docker compose -f docker-compose-grid.yml up -d'
                 sh 'sleep 20'
             }
@@ -59,7 +60,7 @@ pipeline {
 
         stage('Stop Selenium Grid') {
             steps {
-                sh 'docker compose -f docker-compose-grid.yml down'
+                sh 'docker compose -f docker-compose-grid.yml down --remove-orphans'
             }
         }
     }
