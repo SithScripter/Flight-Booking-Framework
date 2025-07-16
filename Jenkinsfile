@@ -8,11 +8,26 @@ pipeline {
         }
     }
 
+    // This options block is the key to the fix
+    options {
+        // Prevents Jenkins from doing a checkout on the controller before the agent starts
+        skipDefaultCheckout()
+    }
+
     parameters {
         choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select environment')
     }
 
     stages {
+        // This stage must now be first to get the code into our agent
+        stage('Checkout SCM') {
+            steps {
+                // We manually check out the code now that we are in the correct agent
+                cleanWs() // Clean workspace before checkout
+                checkout scm
+            }
+        }
+
         stage('Log Build Info') {
             steps {
                 echo "================================================="
@@ -24,18 +39,6 @@ pipeline {
                 echo "Branch: ${env.BRANCH_NAME}"
                 echo "Commit: ${env.GIT_COMMIT}"
                 echo "================================================="
-            }
-        }
-
-        stage('Clean Workspace') {
-            steps {
-                cleanWs()
-            }
-        }
-
-        stage('Checkout SCM') {
-            steps {
-                checkout scm
             }
         }
 
@@ -70,6 +73,7 @@ pipeline {
 
     post {
         always {
+            // The post actions will now run in the agent's context
             echo '📦 Archiving and publishing reports...'
             archiveAndPublishReports()
 
