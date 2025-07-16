@@ -40,12 +40,21 @@ pipeline {
                 sh 'sleep 20'
             }
         }
-
-        stage('Run Tests') {
-            steps {
-                sh 'mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke -Dbrowser.headless=true'
-            }
-        }
+		
+		stage('Build & Run Smoke Tests') {
+			steps {
+				echo "🧪 Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
+				// Use a script block to safely build the command
+				script {
+					// 1. Construct the command as a Groovy string.
+					//    Groovy handles the variable interpolation perfectly.
+					def mvnCommand = "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke -Dbrowser.headless=true"
+					
+					// 2. Execute the clean command string in the shell.
+					sh mvnCommand
+				}
+			}
+		}
 
         stage('Stop Selenium Grid') {
             steps {
