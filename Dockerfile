@@ -1,11 +1,13 @@
-# ✅ Base image with Maven and JDK 21 (Temurin distribution)
+# ✅ Base image with Maven and JDK 21
 FROM maven:3.9-eclipse-temurin-21
 
-# ✅ Set working directory
+# Set working directory
 WORKDIR /usr/src/app
 
-# ✅ Install curl (required for Qase integration)
+USER root
+
+# ✅ Install curl
 RUN apt-get update && apt-get install -y curl
 
-# ✅ Default command (optional, Jenkins overrides this)
+# Optional: default CMD if ever used interactively
 CMD ["mvn", "--version"]
