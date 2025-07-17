@@ -57,7 +57,7 @@ pipeline
 				echo "🧪 Running smoke tests on: ${params.TARGET_ENVIRONMENT}"
 				script
 				{
-					def mvnCommand = "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke -Dbrowser.headless=true"
+					def mvnCommand = "mvn clean test -P smoke -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=smoke -Dbrowser.headless=true -Dreport.dir=smoke"
 					sh mvnCommand
 				}
 			}
