@@ -12,6 +12,7 @@ pipeline
 	parameters
 	{
 		choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select environment')
+		string(name: 'QASE_TEST_CASE_IDS', defaultValue: '[2]', description: 'Comma-separated Qase Test Case IDs')
 	}
 
 	stages
@@ -160,7 +161,7 @@ pipeline
 						updateQase(
 								projectCode: 'FB',
 								credentialsId: 'qase-api-token',
-								testCaseIds: '[2]'
+								testCaseIds: params.QASE_TEST_CASE_IDS
 								)
 						sendBuildSummaryEmail(
 								suiteName: 'smoke',
