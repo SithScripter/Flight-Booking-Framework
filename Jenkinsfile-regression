@@ -1,113 +1,85 @@
 @Library('my-automation-library') _
-pipeline {
-    agent any
 
-    tools {
-        maven 'apache-maven-3.9.9'
-        jdk 'JDK 21'
+pipeline {
+    // We define no top-level agent. Each stage will define its own.
+    agent none 
+
+    options {
+        skipDefaultCheckout()
     }
 
     parameters {
-        // ✅ Toggle switch to enable/disable manual approval gate
-        booleanParam(name: 'MANUAL_APPROVAL', defaultValue: false, description: 'Enable this to pause the pipeline and require manual approval before running regression.')
+        // Kept your parameters for environment and the manual approval gate
+        choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select environment')
+        booleanParam(name: 'MANUAL_APPROVAL', defaultValue: false, description: 'Enable this to pause before running regression.')
+        string(name: 'QASE_TEST_CASE_IDS', defaultValue: '[1, 2]', description: 'Comma-separated Qase Test Case IDs')
     }
 
     stages {
-
-        stage('Log Build Info') {
-            steps {
-                echo "================================================="
-                echo "          BUILD & TEST METADATA"
-                echo "================================================="
-                echo "Job: ${env.JOB_NAME}"
-                echo "Build Number: ${env.BUILD_NUMBER}"
-                echo "Workspace: ${env.WORKSPACE}"
-                echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
-                echo "Branch: ${env.BRANCH_NAME}"
-                echo "Commit: ${env.GIT_COMMIT}"
-                echo "================================================="
+        stage('Initialize & Start Grid') {
+            // This stage only runs on the 'enhancements' branch
+            when { branch 'enhancements' }
+            agent {
+                docker {
+                    image 'flight-booking-agent:latest'
+                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
+                }
             }
-        }
-
-        stage('Clean Workspace') {
             steps {
                 cleanWs()
-            }
-        }
-
-        stage('Checkout SCM') {
-            steps {
                 checkout scm
-                bat "type Jenkinsfile-regression"
-            }
-        }
-
-        // ✅ This stage runs ONLY on the 'enhancements' branch to avoid resource conflict from other branches
-        stage('Start Selenium Grid (Docker)') {
-            when {
-                branch 'enhancements'
-            }
-            steps {
-                script {
-                    // ✅ Retry logic for flaky grid start failures
-                    retry(2) {
-                        echo "🟡 Attempting to start Docker Grid..."
-                        bat 'docker-compose -f docker-compose-grid.yml up -d'
-                        bat 'ping -n 20 127.0.0.1 > NUL' // Windows wait
-                    }
+                printBuildMetadata('regression') // Using our shared library function
+                
+                // Using your retry logic with the shared library function
+                retry(2) {
+                    startDockerGrid('docker-compose-grid.yml', 20)
                 }
             }
         }
 
-        // ✅ Manual approval gate is conditionally triggered based on user toggle
-        stage('Approval (Optional)') {
+        stage('Approval Gate (Optional)') {
             when {
                 allOf {
                     branch 'enhancements'
                     expression { return params.MANUAL_APPROVAL }
                 }
             }
+            // This simple input stage can run on any available agent
+            agent any 
             steps {
                 timeout(time: 30, unit: 'MINUTES') {
-                    input message: '🛑 Proceed with Regression Execution?'
+                    input message: '🛑 Proceed with full regression execution?'
                 }
             }
         }
 
-        // ✅ Test execution runs ONLY on 'enhancements' branch
-        stage('Run Parallel Regression Tests') {
-            when {
-                branch 'enhancements'
+        stage('Build & Run Parallel Regression Tests') {
+            when { branch 'enhancements' }
+            agent {
+                docker {
+                    image 'flight-booking-agent:latest'
+                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint="" --network=selenium_grid_network'
+                }
             }
             steps {
                 timeout(time: 2, unit: 'HOURS') {
                     script {
+                        // Your parallel execution logic, converted to 'sh'
+                        def baseMvnCommand = """
+                            mvn clean test \\
+                            -P regression \\
+                            -Denv=${params.TARGET_ENVIRONMENT} \\
+                            -Dtest.suite=regression \\
+                            -Dbrowser.headless=true
+                        """
                         parallel(
                             Chrome: {
                                 echo '🧪 Running regression tests on Chrome...'
-                                bat """
-                                    mvn clean test ^
-                                    -P regression ^
-                                    -Denv=PRODUCTION ^
-                                    -Dtest.suite=regression ^
-                                    -Dbrowser=CHROME ^
-                                    -Dreport.dir=chrome ^
-                                    -Dbrowser.headless=true ^
-                                    -Dmaven.repo.local=.m2-chrome
-                                """
+                                sh "${baseMvnCommand} -Dbrowser=CHROME -Dreport.dir=chrome -Dmaven.repo.local=.m2-chrome"
                             },
                             Firefox: {
                                 echo '🧪 Running regression tests on Firefox...'
-                                bat """
-                                    mvn clean test ^
-                                    -P regression ^
-                                    -Denv=PRODUCTION ^
-                                    -Dtest.suite=regression ^
-                                    -Dbrowser=FIREFOX ^
-                                    -Dreport.dir=firefox ^
-                                    -Dbrowser.headless=true ^
-                                    -Dmaven.repo.local=.m2-firefox
-                                """
+                                sh "${baseMvnCommand} -Dbrowser=FIREFOX -Dreport.dir=firefox -Dmaven.repo.local=.m2-firefox"
                             }
                         )
                     }
@@ -118,96 +90,49 @@ pipeline {
 
     post {
         always {
-            echo '📦 Archiving reports and publishing HTML dashboards...'
-
-            // ✅ Generate dashboard with test summary
             script {
-                def suiteName = "regression"
-                def summaryFile = "reports/${suiteName}-failure-summary.txt"
-                def hasFailures = fileExists(summaryFile) && readFile(summaryFile).trim().toLowerCase().contains("failed")
+                docker.image('flight-booking-agent:latest').inside('-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""') {
+                    
+                    // Conditionally stop the grid only on the target branch
+                    if (env.BRANCH_NAME == 'enhancements') {
+						echo '🧹 Tearing down Selenium Grid...'
+                        stopDockerGrid('docker-compose-grid.yml')
+                    }
+                    
+                    generateDashboard("regression", "${env.BUILD_NUMBER}")
+                    archiveAndPublishReports()
 
-                def failureSummary = hasFailures ? readFile(summaryFile).trim() : "✅ All tests passed."
-                def failureHeader = hasFailures ? "❌ Failure Summary" : "✅ Test Result Summary"
-                def failureBoxColor = hasFailures ? "#fff3f3" : "#f3fff3"
-                def failureBorderColor = hasFailures ? "#f44336" : "#4CAF50"
-                def failureTextColor = hasFailures ? "#c62828" : "#2e7d32"
-
-                writeFile file: 'reports/index.html', text: """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Regression Test Dashboard</title>
-                    <style>
-                        body { font-family: Arial; padding: 20px; background-color: #f7f7f7; }
-                        h1 { color: #222; }
-                        ul { list-style-type: none; padding-left: 0; }
-                        li { margin: 10px 0; }
-                        a { color: #1976D2; font-size: 16px; text-decoration: none; }
-                        a:hover { text-decoration: underline; }
-                        .summary-box {
-                            background-color: ${failureBoxColor};
-                            border-left: 6px solid ${failureBorderColor};
-                            padding: 10px;
-                            margin-top: 20px;
-                            white-space: pre-line;
-                            font-family: monospace;
-                            color: ${failureTextColor};
-                        }
-                    </style>
-                </head>
-                <body>
-                    <h1>📊 Regression Test Dashboard</h1>
-                    <ul>
-                        <li>🧪 <a href="chrome/index.html" target="_blank">Chrome Report</a></li>
-                        <li>🧪 <a href="firefox/index.html" target="_blank">Firefox Report</a></li>
-                    </ul>
-                    <p><strong>Build:</strong> #${env.BUILD_NUMBER}</p>
-                    <h2>${failureHeader}</h2>
-                    <div class="summary-box">${failureSummary}</div>
-                </body>
-                </html>
-                """
-            }
-
-            // ✅ Archive and publish reports using shared function
-            archiveAndPublishReports()
-
-            // ✅ Only cleanup, Qase, and email on 'enhancements' branch
-            script {
-                echo "🧹 Checking if this is enhancements branch for post-build steps..."
-                if (env.BRANCH_NAME == 'enhancements') {
-                    echo "🧹 Stopping Docker Selenium Grid..."
-                    stopDockerGrid()
-
-                    updateQase(
-                        projectCode: 'FB',
-                        credentialsId: 'qase-api-token',
-                        testCaseIds: '[1, 2]'
-                    )
-
-                    sendBuildSummaryEmail(
-                        suiteName: 'regression',
-                        emailCredsId: 'recipient-email-list'
-                    )
-                } else {
-                    echo "ℹ️ Skipping teardown and reporting steps for branch: ${env.BRANCH_NAME}"
+                    if (env.BRANCH_NAME == 'enhancements') {
+                        updateQase(
+                            projectCode: 'FB',
+                            credentialsId: 'qase-api-token',
+                            testCaseIds: params.QASE_TEST_CASE_IDS
+                        )
+                        sendBuildSummaryEmail(
+                            suiteName: 'regression',
+                            emailCredsId: 'recipient-email-list'
+                        )
+                    } else {
+                        echo "ℹ️ Skipping notifications for branch: ${env.BRANCH_NAME}"
+                    }
                 }
             }
         }
-
-        failure {
-            echo '⚠️ Build failed. Cleaning up Selenium containers...'
+		        failure {
             script {
-                try {
-                    def result = bat(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
-                    if (result) {
-                        echo "🛑 Stopping containers:\n${result}"
-                        stopDockerGrid()
-                    } else {
-                        echo "✅ No active Selenium containers to stop."
+                docker.image('flight-booking-agent:latest').inside('-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""') {
+                    echo '⚠️ Build failed. Checking for running Selenium containers...'
+                    try {
+                        def result = sh(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
+                        if (result) {
+                            echo "🛑 Stopping containers:\n${result}"
+                            stopDockerGrid('docker-compose-grid.yml')
+                        } else {
+                            echo "✅ No active Selenium containers to stop."
+                        }
+                    } catch (e) {
+                        echo "⚠️ Docker cleanup error: ${e.getMessage()}"
                     }
-                } catch (e) {
-                    echo "⚠️ Docker cleanup error: ${e.getMessage()}"
                 }
             }
         }

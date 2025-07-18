@@ -31,16 +31,13 @@ pipeline
 			{
 				cleanWs()
 				checkout scm
-				//				echo "================================================="
-				//				echo "         BUILD & TEST METADATA"
-				//				echo "================================================="
-				//				echo "Job: ${env.JOB_NAME}, Build: ${env.BUILD_NUMBER}, Branch: ${env.BRANCH_NAME}"
-				//				echo "================================================="
 				printBuildMetadata('smoke')
 				echo '📦 Starting Docker-based Selenium Grid...'
-				//				sh 'docker-compose -f docker-compose-grid.yml up -d'
-				//				sh 'sleep 20'
-				startDockerGrid('docker-compose-grid.yml', 20)
+				// Using your retry logic with the shared library function
+				retry(2)
+				{
+					startDockerGrid('docker-compose-grid.yml', 20)
+				}
 			}
 		}
 
@@ -107,56 +104,6 @@ pipeline
 					stopDockerGrid('docker-compose-grid.yml')
 
 					echo '📦 Archiving and publishing reports...'
-
-					//					script
-					//					{
-					//						def suiteName = "smoke"
-					//						def summaryFile = "reports/${suiteName}-failure-summary.txt"
-					//						def hasFailures = fileExists(summaryFile) && readFile(summaryFile).trim().toLowerCase().contains("failed")
-					//
-					//						def failureSummary = hasFailures ? readFile(summaryFile).trim() : "✅ All tests passed."
-					//						def failureHeader = hasFailures ? "❌ Failure Summary" : "✅ Test Result Summary"
-					//						def failureBoxColor = hasFailures ? "#fff3f3" : "#f3fff3"
-					//						def failureBorderColor = hasFailures ? "#f44336" : "#4CAF50"
-					//						def failureTextColor = hasFailures ? "#c62828" : "#2e7d32"
-					//
-					//						writeFile file: 'reports/index.html', text: """
-					//                            <!DOCTYPE html>
-					//                            <html>
-					//                            <head>
-					//                                <title>Smoke Test Dashboard</title>
-					//                                <style>
-					//                                    body { font-family: Arial; padding: 20px; background-color: #f7f7f7; }
-					//                                    h1 { color: #222; }
-					//                                    ul { list-style-type: none; padding-left: 0; }
-					//                                    li { margin: 10px 0; }
-					//                                    a { color: #1976D2; font-size: 16px; text-decoration: none; }
-					//                                    a:hover { text-decoration: underline; }
-					//                                    .summary-box {
-					//                                        background-color: ${failureBoxColor};
-					//                                        border-left: 6px solid ${failureBorderColor};
-					//                                        padding: 10px;
-					//                                        margin-top: 20px;
-					//                                        white-space: pre-line;
-					//                                        font-family: monospace;
-					//                                        color: ${failureTextColor};
-					//                                    }
-					//                                </style>
-					//                            </head>
-					//                            <body>
-					//                                <h1>📊 Smoke Test Dashboard</h1>
-					//                                <ul>
-					//                                    <li>🧪 <a href="chrome/index.html" target="_blank">Chrome Report</a></li>
-					//                                    <li>🧪 <a href="firefox/index.html" target="_blank">Firefox Report</a></li>
-					//                                </ul>
-					//                                <p><strong>Build:</strong> #${env.BUILD_NUMBER}</p>
-					//                                <h2>${failureHeader}</h2>
-					//                                <div class="summary-box">${failureSummary}</div>
-					//                            </body>
-					//                            </html>
-					//                        """
-					//					}
-
 					generateDashboard("smoke", "${env.BUILD_NUMBER}")
 
 					archiveAndPublishReports()
@@ -175,6 +122,32 @@ pipeline
 					} catch (err)
 					{
 						echo "⚠️ Post-build notification actions failed: ${err.getMessage()}"
+					}
+				}
+			}
+		}
+
+		failure
+		{
+			script
+			{
+				docker.image('flight-booking-agent:latest').inside('-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""')
+				{
+					echo '⚠️ Build failed. Checking for running Selenium containers...'
+					try
+					{
+						def result = sh(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
+						if (result)
+						{
+							echo "🛑 Stopping containers:\n${result}"
+							stopDockerGrid('docker-compose-grid.yml')
+						} else
+						{
+							echo "✅ No active Selenium containers to stop."
+						}
+					} catch (e)
+					{
+						echo "⚠️ Docker cleanup error: ${e.getMessage()}"
 					}
 				}
 			}
