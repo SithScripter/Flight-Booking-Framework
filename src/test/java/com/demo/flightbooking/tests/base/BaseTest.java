@@ -51,7 +51,11 @@ public class BaseTest {
         }
         logger.info("✅ Logs directory ensured.");
         
-        File oldSummary = new File("reports/regression-failure-summary.txt");
+        // ✅ Read the suite name from the system property passed by Maven
+        String suiteName = System.getProperty("test.suite", "default"); 
+
+        // ✅ Build the filename dynamically
+        File oldSummary = new File("reports/" + suiteName + "-failure-summary.txt");
         if (oldSummary.exists()) {
             oldSummary.delete();
             logger.info("🧹 Old failure summary deleted.");
@@ -159,7 +163,7 @@ public class BaseTest {
         String suiteName = System.getProperty("test.suite", "default");
         String reportPath = "reports/" + reportDir + "/";
         String reportFileName = suiteName + "-" + reportDir + "-report.html";
-        String mergedSummaryFile = "reports/regression-failure-summary.txt";
+        String mergedSummaryFile = "reports/" + suiteName + "-failure-summary.txt";
 
         if (!failureSummaries.isEmpty()) {
             try {
