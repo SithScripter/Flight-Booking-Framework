@@ -66,10 +66,10 @@ pipeline {
                     script {
                         // Your parallel execution logic, converted to 'sh'
                         def baseMvnCommand = """
-                            mvn clean test \\
-                            -P regression \\
-                            -Denv=${params.TARGET_ENVIRONMENT} \\
-                            -Dtest.suite=regression \\
+                            mvn clean test \
+                            -P regression \
+                            -Denv=${params.TARGET_ENVIRONMENT} \
+                            -Dtest.suite=regression \
                             -Dbrowser.headless=true
                         """
                         parallel(
