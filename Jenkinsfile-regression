@@ -61,30 +61,24 @@ pipeline {
                     args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint="" --network=selenium_grid_network'
                 }
             }
-            steps {
-                timeout(time: 2, unit: 'HOURS') {
-                    script {
-                        // Your parallel execution logic, converted to 'sh'
-                        def baseMvnCommand = """
-                            mvn clean test \
-                            -P regression \
-                            -Denv=${params.TARGET_ENVIRONMENT} \
-                            -Dtest.suite=regression \
-                            -Dbrowser.headless=true
-                        """
-                        parallel(
-                            Chrome: {
-                                echo '🧪 Running regression tests on Chrome...'
-                                sh "${baseMvnCommand} -Dbrowser=CHROME -Dreport.dir=chrome -Dmaven.repo.local=.m2-chrome"
-                            },
-                            Firefox: {
-                                echo '🧪 Running regression tests on Firefox...'
-                                sh "${baseMvnCommand} -Dbrowser=FIREFOX -Dreport.dir=firefox -Dmaven.repo.local=.m2-firefox"
-                            }
-                        )
-                    }
-                }
-            }
+			steps {
+				timeout(time: 2, unit: 'HOURS') {
+					script {
+						parallel(
+							Chrome: {
+								echo '🧪 Running regression tests on Chrome...'
+								def mvnChromeCommand = "mvn clean test -P regression -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=regression -Dbrowser.headless=true -Dbrowser=CHROME -Dreport.dir=chrome -Dmaven.repo.local=.m2-chrome"
+								sh mvnChromeCommand
+							},
+							Firefox: {
+								echo '🧪 Running regression tests on Firefox...'
+								def mvnFirefoxCommand = "mvn clean test -P regression -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=regression -Dbrowser.headless=true -Dbrowser=FIREFOX -Dreport.dir=firefox -Dmaven.repo.local=.m2-firefox"
+								sh mvnFirefoxCommand
+							}
+						)
+					}
+				}
+			}
         }
     }
 
