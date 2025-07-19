@@ -79,6 +79,7 @@ pipeline {
                 }
             }
 			steps {
+				echo "🧪 Running suite: ${params.SUITE_NAME}"
 				timeout(time: 2, unit: 'HOURS') {
 					script {
                         // The Maven command is built dynamically using the SUITE_NAME parameter for maximum reusability.
