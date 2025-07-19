@@ -69,7 +69,7 @@ pipeline {
 		// Base Maven command used for both Chrome and Firefox runs.
 		// SUITE_NAME drives the profile (testng-smoke.xml or testng-regression.xml).
         // This stage executes the tests in parallel across Chrome and Firefox.
-        stage("Build & Run Parallel '${params.SUITE_NAME}' Tests") {
+        stage('Build & Run Parallel Tests') {
             when { branch 'enhancements' }
             agent {
                 // Use our all-in-one agent and connect it to the grid's network.
