@@ -19,6 +19,8 @@ pipeline
 	{
 		stage('Initialize & Start Grid')
 		{
+			// This stage only runs on the 'enhancements' branch
+			when { branch 'enhancements' }
 			agent
 			{
 				docker
@@ -43,6 +45,7 @@ pipeline
 
 		stage('Build & Run Smoke Tests')
 		{
+			when { branch 'enhancements' }
 			agent
 			{
 				docker
@@ -99,29 +102,37 @@ pipeline
 			{
 				docker.image('flight-booking-agent:latest').inside('-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""')
 				{
-					echo '🛑 Stopping Docker-based Selenium Grid...'
-					//					sh 'docker-compose -f docker-compose-grid.yml down || echo "Grid already stopped."'
-					stopDockerGrid('docker-compose-grid.yml')
+					// Conditionally stop the grid only on the target branch
+					if (env.BRANCH_NAME == 'enhancements')
+					{
+						echo '🧹 Tearing down Selenium Grid...'
+						stopDockerGrid('docker-compose-grid.yml')
+					}
 
 					echo '📦 Archiving and publishing reports...'
 					generateDashboard("smoke", "${env.BUILD_NUMBER}")
-
 					archiveAndPublishReports()
 
-					try
+					if (env.BRANCH_NAME == 'enhancements')
 					{
-						updateQase(
-								projectCode: 'FB',
-								credentialsId: 'qase-api-token',
-								testCaseIds: params.QASE_TEST_CASE_IDS
-								)
-						sendBuildSummaryEmail(
-								suiteName: 'smoke',
-								emailCredsId: 'recipient-email-list'
-								)
-					} catch (err)
+						try
+						{
+							updateQase(
+									projectCode: 'FB',
+									credentialsId: 'qase-api-token',
+									testCaseIds: params.QASE_TEST_CASE_IDS
+									)
+							sendBuildSummaryEmail(
+									suiteName: 'smoke',
+									emailCredsId: 'recipient-email-list'
+									)
+						} catch (err)
+						{
+							echo "⚠️ Post-build notification actions failed: ${err.getMessage()}"
+						}
+					}else
 					{
-						echo "⚠️ Post-build notification actions failed: ${err.getMessage()}"
+						echo "ℹ️ Skipping notifications for branch: ${env.BRANCH_NAME}"
 					}
 				}
 			}
