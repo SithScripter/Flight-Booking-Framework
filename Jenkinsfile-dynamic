@@ -1,0 +1,185 @@
+@Library('my-automation-library') _
+
+pipeline {
+    // ✅ We define no top-level agent. This enables a flexible multi-agent
+    // strategy where each stage can use its own specialized environment.
+    agent none 
+
+    options {
+        // ✅ Prevents Jenkins from doing an initial checkout on the controller.
+        // We will handle the checkout manually inside the correct agent.
+        skipDefaultCheckout()
+    }
+
+    parameters {
+        // ✅ This is the master control to select which test suite to run.
+        choice(name: 'SUITE_NAME', choices: ['smoke', 'regression'], description: 'Select the test suite to run.')
+		
+		// ✅ The target environment for test execution (affects ConfigReader and URLs).
+        choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select environment')
+        
+        // ✅ An optional manual approval gate, primarily for the regression suite.
+        booleanParam(name: 'MANUAL_APPROVAL', defaultValue: false, description: 'Enable for regression manual approval.')
+        
+        // ✅ Allows overriding the default Qase test case IDs for a specific run
+        string(name: 'QASE_TEST_CASE_IDS', defaultValue: '', description: 'Optional: Override default Qase IDs.')
+    }
+
+    stages {
+        // This stage prepares the environment by starting the Selenium Grid.
+        stage('Initialize & Start Grid') {
+            when { branch 'enhancements' }
+            agent {
+                // Use our all-in-one agent, which has all necessary tools (Docker, Compose, etc.).
+                docker {
+                    image 'flight-booking-agent:latest'
+                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
+                }
+            }
+            steps {
+				echo "🚀 Initializing grid for suite: '${params.SUITE_NAME}'"
+                cleanWs()
+                checkout scm
+                printBuildMetadata(params.SUITE_NAME)
+                
+                // Retry starting the grid to handle any temporary network flakiness.
+                retry(2) {
+                    startDockerGrid('docker-compose-grid.yml', 20)
+                }
+            }
+        }
+
+        // This stage is only active for regression runs when the user toggles it on.
+        stage('Approval Gate (Regression Only)') {
+            when {
+                allOf {
+                    branch 'enhancements'
+                    expression { return params.SUITE_NAME == 'regression' }
+                    expression { return params.MANUAL_APPROVAL }
+                }
+            }
+            // An input step doesn't need a heavy agent, so 'agent any' is efficient.
+            agent any 
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    input message: "🛑 Proceed with full regression execution for branch '${env.BRANCH_NAME}'?"
+                }
+            }
+        }
+		// Base Maven command used for both Chrome and Firefox runs.
+		// SUITE_NAME drives the profile (testng-smoke.xml or testng-regression.xml).
+        // This stage executes the tests in parallel across Chrome and Firefox.
+        stage("Build & Run Parallel '${params.SUITE_NAME}' Tests") {
+            when { branch 'enhancements' }
+            agent {
+                // Use our all-in-one agent and connect it to the grid's network.
+                docker {
+                    image 'flight-booking-agent:latest'
+                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint="" --network=selenium_grid_network'
+                }
+            }
+			steps {
+				timeout(time: 2, unit: 'HOURS') {
+					script {
+                        // The Maven command is built dynamically using the SUITE_NAME parameter for maximum reusability.
+                        def baseMvnCommand = "mvn clean test -P ${params.SUITE_NAME} -Denv=${params.TARGET_ENVIRONMENT} -Dtest.suite=${params.SUITE_NAME} -Dbrowser.headless=true"
+                        
+                        // The 'parallel' step runs tests on multiple browsers at the same time.
+						parallel(
+							Chrome: {
+								sh "${baseMvnCommand} -Dbrowser=CHROME -Dreport.dir=chrome -Dmaven.repo.local=.m2-chrome"
+							},
+							Firefox: {
+								sh "${baseMvnCommand} -Dbrowser=FIREFOX -Dreport.dir=firefox -Dmaven.repo.local=.m2-firefox"
+							}
+						)
+					}
+				}
+			}
+        }
+    }
+
+    post {
+        // 'always' ensures these steps run regardless of the build's success or failure.
+        always {
+            script {
+                // Use the 'inside' step to run all cleanup, reporting, and notifications inside our container.
+                // This is needed because we're using 'agent none' at the top level.
+                docker.image('flight-booking-agent:latest').inside('-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""') {
+                    
+                    if (env.BRANCH_NAME == 'enhancements') {
+						echo '🧹 Tearing down Selenium Grid...'
+                        stopDockerGrid('docker-compose-grid.yml')
+                    }
+                    
+					echo "📦 Generating report dashboard..."
+                    generateDashboard(params.SUITE_NAME, "${env.BUILD_NUMBER}")
+                    archiveAndPublishReports()
+                    
+                    // ✅ This condition is now more flexible. As your project grows, you can add
+                    // other important branches like 'main' or 'release' to this list.
+                    
+
+                    if (env.BRANCH_NAME in ['enhancements', 'main']) {
+                        // A try/catch block ensures that a failure in notifications will not fail the entire build.
+                        try {
+                            // Read the external configuration file for Qase settings.
+                            def qaseConfig = readJSON file: 'cicd/qase_config.json'
+                            // Look up the settings for the currently selected suite.
+                            def suiteSettings = qaseConfig[params.SUITE_NAME]
+                            
+                            // ✅ A check to prevent errors if the suite isn't in the config file.
+                            if (!suiteSettings) {
+                                error "❌ Qase config missing for suite: ${params.SUITE_NAME}. Please check cicd/qase_config.json."
+                            }
+
+                            def qaseIds
+                            if (params.QASE_TEST_CASE_IDS && !params.QASE_TEST_CASE_IDS.isEmpty()) {
+                                // Use the user-provided parameter if it's not empty (for overrides).
+                                qaseIds = params.QASE_TEST_CASE_IDS
+                            } else {
+                                // Otherwise, use the value from our config file.
+                                qaseIds = suiteSettings.testCaseIds
+                            }
+
+                            updateQase(
+                                projectCode: 'FB',
+                                credentialsId: 'qase-api-token',
+                                testCaseIds: qaseIds
+                            )
+                            sendBuildSummaryEmail(
+                                suiteName: params.SUITE_NAME,
+                                emailCredsId: 'recipient-email-list'
+                            )
+                        } catch (err) {
+                            echo "⚠️ Post-build notification actions failed: ${err.getMessage()}"
+                        }
+					} else {
+						echo "ℹ️ Skipping notifications for branch: ${env.BRANCH_NAME}"
+					}
+                }
+            }
+        }
+        
+		// The 'failure' block provides an extra layer of cleanup specifically for failed builds.
+		failure {
+            script {
+                docker.image('flight-booking-agent:latest').inside('-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""') {
+                    echo '⚠️ Build failed. Forcing Selenium Grid cleanup...'
+                    try {
+						// ✅ Detect leftover Selenium containers and stop them to prevent grid pollution
+                        def result = sh(script: 'docker ps -a --filter "name=selenium" --format "{{.Names}}"', returnStdout: true).trim()
+                        if (result) {
+                            echo "🛑 Stopping containers:\n${result}"
+                            stopDockerGrid('docker-compose-grid.yml')
+                        } else {
+                            echo "✅ No active Selenium containers found to stop."
+                        }
+                    } catch (e) {
+                        echo "⚠️ Docker cleanup error: ${e.getMessage()}"
+                    }
+                }
+            }
+        }
+    }
+}
