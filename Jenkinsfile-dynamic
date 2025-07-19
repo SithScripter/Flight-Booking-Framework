@@ -26,7 +26,7 @@ pipeline {
     }
 
     stages {
-        // This stage prepares the environment by starting the Selenium Grid.
+        // This stage prepares the environment by starting the Selenium Grid
         stage('Initialize & Start Grid') {
             when { branch 'enhancements' }
             agent {
