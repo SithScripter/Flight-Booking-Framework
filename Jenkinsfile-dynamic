@@ -25,7 +25,7 @@ pipeline {
         choice(name: 'TARGET_ENVIRONMENT', choices: ['PRODUCTION', 'STAGING', 'QA'], description: 'Select test environment.')
 
         // ✅ An optional manual approval gate, used only by the regression suite.
-        booleanParam(name: 'MANUAL_APPROVAL', defaultValue: false, description: 'Require manual approval for regression.')
+        booleanParam(name: 'MANUAL_APPROVAL', defaultValue: false, description: '🛑 Only relevant if "regression" is selected. Ignored for "smoke".')
 
         // ✅ An optional override for Qase test case IDs.
         string(name: 'QASE_TEST_CASE_IDS', defaultValue: '', description: 'Optional: Override default Qase IDs.')
