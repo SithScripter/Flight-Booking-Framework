@@ -1,5 +1,4 @@
 # 🧪 This Docker Compose file is intended to be used in Jenkins for spinning up a local Selenium Grid before running automated tests
-# The version is at the top level
 #version: '3.8' 
 
 services:
